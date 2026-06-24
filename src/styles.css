@@ -525,6 +525,27 @@ textarea:focus {
   font-weight: 700;
 }
 
+.completed-chat-notice {
+  display: grid;
+  gap: 4px;
+  margin: 14px 24px 0;
+  padding: 13px 14px;
+  border: 1px solid var(--line);
+  border-radius: 8px;
+  background: var(--surface-soft);
+}
+
+.completed-chat-notice strong {
+  color: var(--ink);
+  font-size: 14px;
+}
+
+.completed-chat-notice span {
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.45;
+}
+
 .messages {
   display: flex;
   flex: 1;
@@ -658,6 +679,19 @@ textarea:focus {
   border: 0;
   padding: 8px 0;
   line-height: 1.45;
+}
+
+.support-compose.locked {
+  display: grid;
+  grid-template-columns: 1fr;
+  min-height: 54px;
+  place-items: center;
+  border-radius: 8px;
+  background: var(--surface-soft);
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: center;
 }
 
 .plus-button {
@@ -1277,6 +1311,11 @@ textarea:focus {
 
   .messages {
     padding: 18px;
+  }
+
+  .completed-chat-notice {
+    margin-left: 18px;
+    margin-right: 18px;
   }
 
   .bubble {

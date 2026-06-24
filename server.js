@@ -334,6 +334,10 @@ app.post("/api/threads/:id/messages", async (request, response) => {
       return "unauthorized";
     }
 
+    if (author === "student" && normalizeStatus(thread.status) === "완료") {
+      return "completed";
+    }
+
     thread.status = author === "admin" ? "진행중" : "미완료";
     thread.updatedAt = new Date().toISOString();
     thread.messages.push({
@@ -357,6 +361,11 @@ app.post("/api/threads/:id/messages", async (request, response) => {
 
   if (result === "unauthorized") {
     response.status(401).json({ message: "Invalid student credentials" });
+    return;
+  }
+
+  if (result === "completed") {
+    response.status(409).json({ message: "Completed thread is closed" });
     return;
   }
 

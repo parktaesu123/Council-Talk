@@ -352,7 +352,7 @@ function App() {
   };
 
   const handleStudentSend = async () => {
-    if (!currentThread || !studentMessage.trim()) {
+    if (!currentThread || normalizeStatus(currentThread.status) === "완료" || !studentMessage.trim()) {
       return;
     }
 
@@ -987,6 +987,13 @@ function SupportPanel({
             {currentThread.tagName && <em>{currentThread.tagName}</em>}
           </div>
 
+          {normalizeStatus(currentThread.status) === "완료" && (
+            <div className="completed-chat-notice">
+              <strong>완료된 채팅입니다.</strong>
+              <span>학생회에서 문의를 완료 처리하여 더 이상 메시지를 보낼 수 없습니다.</span>
+            </div>
+          )}
+
           <div className="messages">
             {currentThread.messages.map((message) => (
               <MessageBubble
@@ -1005,26 +1012,32 @@ function SupportPanel({
             ))}
           </div>
 
-          <div className="support-compose">
-            <button aria-label="첨부" className="plus-button" type="button">
-              +
-            </button>
-            <textarea
-              value={studentMessage}
-              onChange={(event) => setStudentMessage(event.target.value)}
-              onKeyDown={(event) => {
-                if (event.key === "Enter" && !event.shiftKey) {
-                  event.preventDefault();
-                  handleStudentSend();
-                }
-              }}
-              placeholder="추가 문의를 입력하세요..."
-              rows={1}
-            />
-            <button aria-label="전송" className="round-send" onClick={handleStudentSend} type="button">
-              <ArrowUp size={22} />
-            </button>
-          </div>
+          {normalizeStatus(currentThread.status) === "완료" ? (
+            <div className="support-compose locked">
+              완료된 채팅이라 메시지를 보낼 수 없습니다.
+            </div>
+          ) : (
+            <div className="support-compose">
+              <button aria-label="첨부" className="plus-button" type="button">
+                +
+              </button>
+              <textarea
+                value={studentMessage}
+                onChange={(event) => setStudentMessage(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    handleStudentSend();
+                  }
+                }}
+                placeholder="추가 문의를 입력하세요..."
+                rows={1}
+              />
+              <button aria-label="전송" className="round-send" onClick={handleStudentSend} type="button">
+                <ArrowUp size={22} />
+              </button>
+            </div>
+          )}
         </>
       )}
     </aside>
