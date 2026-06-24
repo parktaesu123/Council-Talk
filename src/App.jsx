@@ -211,12 +211,13 @@ function App() {
   };
 
   const completeStudentAuth = (profile, data) => {
-    setStudentProfile(profile);
+    const nextProfile = { ...profile, ...data.profile };
+    setStudentProfile(nextProfile);
     setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
     apiRequest("/api/tags")
       .then((tagData) => setTags(normalizeTags(tagData.tags)))
       .catch(() => {});
-    setForm((current) => ({ ...current, studentId: profile.studentId, name: profile.name }));
+    setForm((current) => ({ ...current, studentId: nextProfile.studentId, name: nextProfile.name }));
     setIdentityError("");
     setSupportView("rooms");
     setIsSupportOpen(true);
@@ -227,15 +228,16 @@ function App() {
     const studentId = identityForm.studentId.trim();
     const name = identityForm.name.trim();
     const pin = identityForm.pin.trim();
+    const isSignup = authMode === "signup";
 
-    if (!/^\d{4}$/.test(studentId) || !name || !/^\d{4}$/.test(pin)) {
-      setIdentityError("학번, 이름, 4자리 비밀번호를 확인해주세요.");
+    if (!name || !/^\d{4}$/.test(pin) || (isSignup && !/^\d{4}$/.test(studentId))) {
+      setIdentityError(isSignup ? "학번, 이름, 4자리 비밀번호를 확인해주세요." : "이름과 4자리 비밀번호를 확인해주세요.");
       return;
     }
 
     setIdentityError("");
-    const profile = { studentId, name, pin };
-    apiRequest(authMode === "signup" ? "/api/students/signup" : "/api/students/session", {
+    const profile = isSignup ? { studentId, name, pin } : { name, pin };
+    apiRequest(isSignup ? "/api/students/signup" : "/api/students/session", {
       method: "POST",
       body: JSON.stringify(profile),
     })
@@ -601,8 +603,8 @@ function StudentAuthModal({
 
         <p>
           {isSignup
-            ? "처음 이용하는 경우 정보를 등록해주세요."
-            : "문의 내역을 보려면 로그인해주세요."}
+            ? "처음 이용하는 경우 학번과 비밀번호를 등록해주세요."
+            : "이름과 비밀번호만 입력하면 문의방으로 이동합니다."}
         </p>
 
         <label>
@@ -617,22 +619,24 @@ function StudentAuthModal({
           />
         </label>
 
-        <label>
-          학번
-          <input
-            inputMode="numeric"
-            maxLength={4}
-            pattern="[0-9]{4}"
-            value={identityForm.studentId}
-            onChange={(event) =>
-              setIdentityForm((current) => ({
-                ...current,
-                studentId: event.target.value.replace(/\D/g, "").slice(0, 4),
-              }))
-            }
-            placeholder="3105"
-          />
-        </label>
+        {isSignup && (
+          <label className="auth-field-enter">
+            학번
+            <input
+              inputMode="numeric"
+              maxLength={4}
+              pattern="[0-9]{4}"
+              value={identityForm.studentId}
+              onChange={(event) =>
+                setIdentityForm((current) => ({
+                  ...current,
+                  studentId: event.target.value.replace(/\D/g, "").slice(0, 4),
+                }))
+              }
+              placeholder="3105"
+            />
+          </label>
+        )}
 
         <label>
           4자리 비밀번호

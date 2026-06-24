@@ -164,17 +164,21 @@ textarea:focus {
   padding: 20px;
   background: rgba(255, 255, 255, 0.74);
   backdrop-filter: blur(10px);
+  animation: backdrop-in 180ms ease-out both;
 }
 
 .student-auth-modal {
   display: grid;
   width: min(390px, 100%);
+  max-height: calc(100dvh - 40px);
+  overflow: auto;
   gap: 14px;
   padding: 24px;
   border: 1px solid var(--line-soft);
   border-radius: 12px;
   background: #ffffff;
   box-shadow: var(--shadow);
+  animation: modal-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
 }
 
 .student-auth-modal header {
@@ -221,6 +225,10 @@ textarea:focus {
   font-weight: 700;
 }
 
+.auth-field-enter {
+  animation: field-in 180ms ease-out both;
+}
+
 .auth-actions {
   display: grid;
   grid-template-columns: 1fr 1fr;
@@ -260,6 +268,53 @@ textarea:focus {
   background: #ffffff;
   box-shadow: var(--shadow);
   overflow: hidden;
+  animation: panel-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+@keyframes backdrop-in {
+  from {
+    opacity: 0;
+  }
+
+  to {
+    opacity: 1;
+  }
+}
+
+@keyframes modal-in {
+  from {
+    opacity: 0;
+    transform: translateY(12px) scale(0.98);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0) scale(1);
+  }
+}
+
+@keyframes field-in {
+  from {
+    opacity: 0;
+    transform: translateY(-6px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes panel-in {
+  from {
+    opacity: 0;
+    transform: translateY(14px);
+  }
+
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 
 .support-header {
@@ -940,6 +995,8 @@ textarea:focus {
   }
 
   .student-auth-modal {
+    width: min(390px, calc(100vw - 28px));
+    max-height: calc(100dvh - 28px);
     padding: 20px;
   }
 
@@ -1012,6 +1069,14 @@ textarea:focus {
 
   .auth-actions {
     grid-template-columns: 1fr;
+  }
+
+  .student-auth-modal h2 {
+    font-size: 22px;
+  }
+
+  .student-auth-modal {
+    gap: 12px;
   }
 
   .support-compose {

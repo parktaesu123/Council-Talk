@@ -109,6 +109,22 @@ const enqueueTagUpdate = async (operation) => {
 
 const normalizeTagName = (name) => String(name || "").trim().slice(0, 24);
 
+const resolveStudentByNameAndPin = async ({ name, pin }) => {
+  const cleanName = String(name || "").trim();
+  const cleanPin = String(pin || "").trim();
+
+  if (!cleanName || !/^\d{4}$/.test(cleanPin)) {
+    return null;
+  }
+
+  const students = await readStudents();
+  const saved = Object.values(students).find(
+    (student) => student.name === cleanName && student.pinHash === hashPin(cleanPin),
+  );
+
+  return saved ? normalizeStudent(saved) : null;
+};
+
 const ensureStudentSession = async ({ studentId, name, pin }, { createIfMissing = false } = {}) => {
   const profile = normalizeStudent({ studentId, name });
   const cleanPin = String(pin || "").trim();
@@ -206,7 +222,9 @@ app.delete("/api/tags/:id", async (request, response) => {
 });
 
 app.post("/api/students/session", async (request, response) => {
-  const profile = await ensureStudentSession(request.body || {});
+  const profile = request.body?.studentId
+    ? await ensureStudentSession(request.body || {})
+    : await resolveStudentByNameAndPin(request.body || {});
 
   if (!profile) {
     response.status(401).json({ message: "Invalid student credentials" });
