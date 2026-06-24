@@ -163,6 +163,16 @@ const studentExists = async ({ studentId, name }) => {
   return Boolean(students[studentKey(profile)]);
 };
 
+const getVisibleThreads = (threads, profile) =>
+  threads.filter((item) => item.studentId === profile.studentId && item.name === profile.name);
+
+const canUseThreadAsStudent = (thread, profile) =>
+  profile && thread.studentId === profile.studentId && thread.name === profile.name;
+
+const canManageMessage = (message, author) =>
+  (author === "admin" && message.author === "admin") ||
+  (author === "student" && message.author === "student");
+
 app.get("/healthz", (_request, response) => {
   response.type("text/plain").send("ok\n");
 });
@@ -357,6 +367,133 @@ app.post("/api/threads/:id/messages", async (request, response) => {
 
   const { thread, threads } = result;
   response.json({ thread, threads });
+});
+
+app.patch("/api/threads/:id/messages/:messageId", async (request, response) => {
+  const { author, text } = request.body || {};
+
+  if (!text || !["student", "admin"].includes(author)) {
+    response.status(400).json({ message: "Invalid message update" });
+    return;
+  }
+
+  const profile = author === "student" ? await ensureStudentSession(request.body || {}) : null;
+
+  const result = await enqueueThreadUpdate(async (threads) => {
+    const thread = threads.find((item) => item.id === request.params.id);
+
+    if (!thread) return null;
+    if (author === "student" && !canUseThreadAsStudent(thread, profile)) return "unauthorized";
+
+    const message = thread.messages.find((item) => item.id === request.params.messageId);
+    if (!message) return null;
+    if (!canManageMessage(message, author)) return "unauthorized";
+
+    message.text = String(text).trim();
+    message.editedAt = new Date().toISOString();
+    thread.updatedAt = new Date().toISOString();
+
+    return {
+      thread,
+      threads: author === "student" ? getVisibleThreads(threads, profile) : threads,
+    };
+  });
+
+  if (result === "unauthorized") {
+    response.status(401).json({ message: "Unauthorized message update" });
+    return;
+  }
+
+  if (!result) {
+    response.status(404).json({ message: "Message not found" });
+    return;
+  }
+
+  response.json(result);
+});
+
+app.delete("/api/threads/:id/messages/:messageId", async (request, response) => {
+  const { author } = request.body || {};
+
+  if (!["student", "admin"].includes(author)) {
+    response.status(400).json({ message: "Invalid message delete" });
+    return;
+  }
+
+  const profile = author === "student" ? await ensureStudentSession(request.body || {}) : null;
+
+  const result = await enqueueThreadUpdate(async (threads) => {
+    const thread = threads.find((item) => item.id === request.params.id);
+
+    if (!thread) return null;
+    if (author === "student" && !canUseThreadAsStudent(thread, profile)) return "unauthorized";
+
+    const index = thread.messages.findIndex((item) => item.id === request.params.messageId);
+    if (index < 0) return null;
+    if (!canManageMessage(thread.messages[index], author)) return "unauthorized";
+
+    thread.messages.splice(index, 1);
+    thread.updatedAt = new Date().toISOString();
+
+    return {
+      thread,
+      threads: author === "student" ? getVisibleThreads(threads, profile) : threads,
+    };
+  });
+
+  if (result === "unauthorized") {
+    response.status(401).json({ message: "Unauthorized message delete" });
+    return;
+  }
+
+  if (!result) {
+    response.status(404).json({ message: "Message not found" });
+    return;
+  }
+
+  response.json(result);
+});
+
+app.patch("/api/threads/:id/messages/:messageId/emoji", async (request, response) => {
+  const { author, emoji } = request.body || {};
+  const cleanEmoji = String(emoji || "").trim().slice(0, 8);
+
+  if (!cleanEmoji || !["student", "admin"].includes(author)) {
+    response.status(400).json({ message: "Invalid emoji" });
+    return;
+  }
+
+  const profile = author === "student" ? await ensureStudentSession(request.body || {}) : null;
+
+  const result = await enqueueThreadUpdate(async (threads) => {
+    const thread = threads.find((item) => item.id === request.params.id);
+
+    if (!thread) return null;
+    if (author === "student" && !canUseThreadAsStudent(thread, profile)) return "unauthorized";
+
+    const message = thread.messages.find((item) => item.id === request.params.messageId);
+    if (!message) return null;
+
+    message.emoji = message.emoji === cleanEmoji ? "" : cleanEmoji;
+    thread.updatedAt = new Date().toISOString();
+
+    return {
+      thread,
+      threads: author === "student" ? getVisibleThreads(threads, profile) : threads,
+    };
+  });
+
+  if (result === "unauthorized") {
+    response.status(401).json({ message: "Unauthorized emoji update" });
+    return;
+  }
+
+  if (!result) {
+    response.status(404).json({ message: "Message not found" });
+    return;
+  }
+
+  response.json(result);
 });
 
 app.patch("/api/threads/:id/status", async (request, response) => {

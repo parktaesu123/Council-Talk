@@ -544,7 +544,7 @@ textarea:focus {
   color: #ffffff;
 }
 
-.bubble div {
+.message-meta {
   display: flex;
   justify-content: space-between;
   gap: 18px;
@@ -561,8 +561,77 @@ textarea:focus {
 }
 
 .bubble p {
+  white-space: pre-wrap;
   margin: 0;
   line-height: 1.55;
+}
+
+.message-emoji {
+  display: inline-grid;
+  width: fit-content;
+  margin-top: 8px;
+  padding: 3px 7px;
+  border-radius: 999px;
+  background: rgba(0, 0, 0, 0.06);
+  font-size: 15px;
+}
+
+.bubble.admin .message-emoji {
+  background: rgba(255, 255, 255, 0.14);
+}
+
+.message-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 5px;
+  margin-top: 9px;
+}
+
+.message-actions button,
+.message-edit-box button {
+  height: 26px;
+  padding: 0 8px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--muted);
+  font-size: 11px;
+  font-weight: 800;
+}
+
+.bubble.admin .message-actions button,
+.bubble.admin .message-edit-box button {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.08);
+  color: rgba(255, 255, 255, 0.76);
+}
+
+.message-actions button.active {
+  border-color: var(--black);
+  background: var(--black);
+  color: #ffffff;
+}
+
+.bubble.admin .message-actions button.active {
+  border-color: #ffffff;
+  background: #ffffff;
+  color: var(--black);
+}
+
+.message-edit-box {
+  display: grid;
+  gap: 8px;
+}
+
+.message-edit-box textarea {
+  min-height: 74px;
+  font-size: 14px;
+}
+
+.message-edit-box div {
+  display: flex;
+  justify-content: flex-end;
+  gap: 6px;
 }
 
 .support-compose {
@@ -577,10 +646,13 @@ textarea:focus {
   box-shadow: 0 6px 22px rgba(0, 0, 0, 0.08);
 }
 
-.support-compose input {
+.support-compose textarea {
   height: 38px;
+  min-height: 38px;
+  max-height: 96px;
   border: 0;
-  padding: 0;
+  padding: 8px 0;
+  line-height: 1.45;
 }
 
 .plus-button {

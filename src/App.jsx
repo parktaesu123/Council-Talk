@@ -19,6 +19,7 @@ const FILTERS = [
   { label: "진행중", value: "진행중" },
   { label: "완료", value: "완료" },
 ];
+const EMOJIS = ["👍", "❤️", "😂", "😮", "🙏"];
 
 const emptyForm = {
   studentId: "",
@@ -103,6 +104,8 @@ function App() {
   );
   const [selectedThreadId, setSelectedThreadId] = useState(null);
   const [adminReply, setAdminReply] = useState("");
+  const [editingMessageId, setEditingMessageId] = useState(null);
+  const [editingText, setEditingText] = useState("");
   const [adminFilter, setAdminFilter] = useState("all");
   const [adminTagFilter, setAdminTagFilter] = useState("all");
   const [adminSection, setAdminSection] = useState("inquiries");
@@ -453,6 +456,101 @@ function App() {
     setAdminReply("");
   };
 
+  const handleMessageEditStart = (message) => {
+    setEditingMessageId(message.id);
+    setEditingText(message.text);
+  };
+
+  const handleMessageEditCancel = () => {
+    setEditingMessageId(null);
+    setEditingText("");
+  };
+
+  const getMessagePayload = (author, extra = {}) =>
+    author === "student"
+      ? {
+          author,
+          studentId: studentProfile?.studentId,
+          name: studentProfile?.name,
+          pin: studentProfile?.pin,
+          ...extra,
+        }
+      : { author, ...extra };
+
+  const handleMessageUpdate = async (thread, message, author) => {
+    const text = editingText.trim();
+
+    if (!text) {
+      return;
+    }
+
+    try {
+      const data = await apiRequest(`/api/threads/${thread.id}/messages/${message.id}`, {
+        method: "PATCH",
+        body: JSON.stringify(getMessagePayload(author, { text })),
+      });
+      setThreads(data.threads.map((item) => ({ ...item, status: normalizeStatus(item.status) })));
+    } catch {
+      saveThreadsFallback((current) =>
+        current.map((item) =>
+          item.id === thread.id
+            ? {
+                ...item,
+                messages: item.messages.map((target) =>
+                  target.id === message.id ? { ...target, text, editedAt: new Date().toISOString() } : target,
+                ),
+              }
+            : item,
+        ),
+      );
+    }
+
+    handleMessageEditCancel();
+  };
+
+  const handleMessageDelete = async (thread, message, author) => {
+    try {
+      const data = await apiRequest(`/api/threads/${thread.id}/messages/${message.id}`, {
+        method: "DELETE",
+        body: JSON.stringify(getMessagePayload(author)),
+      });
+      setThreads(data.threads.map((item) => ({ ...item, status: normalizeStatus(item.status) })));
+    } catch {
+      saveThreadsFallback((current) =>
+        current.map((item) =>
+          item.id === thread.id
+            ? { ...item, messages: item.messages.filter((target) => target.id !== message.id) }
+            : item,
+        ),
+      );
+    }
+  };
+
+  const handleMessageEmoji = async (thread, message, author, emoji) => {
+    try {
+      const data = await apiRequest(`/api/threads/${thread.id}/messages/${message.id}/emoji`, {
+        method: "PATCH",
+        body: JSON.stringify(getMessagePayload(author, { emoji })),
+      });
+      setThreads(data.threads.map((item) => ({ ...item, status: normalizeStatus(item.status) })));
+    } catch {
+      saveThreadsFallback((current) =>
+        current.map((item) =>
+          item.id === thread.id
+            ? {
+                ...item,
+                messages: item.messages.map((target) =>
+                  target.id === message.id
+                    ? { ...target, emoji: target.emoji === emoji ? "" : emoji }
+                    : target,
+                ),
+              }
+            : item,
+        ),
+      );
+    }
+  };
+
   const handleCreateTag = async (event) => {
     event.preventDefault();
     const name = tagName.trim();
@@ -523,6 +621,13 @@ function App() {
         handleAdminReply={handleAdminReply}
         handleAdminStatusChange={handleAdminStatusChange}
         handleDeleteTag={handleDeleteTag}
+        handleMessageDelete={handleMessageDelete}
+        handleMessageEditCancel={handleMessageEditCancel}
+        handleMessageEditStart={handleMessageEditStart}
+        handleMessageEmoji={handleMessageEmoji}
+        handleMessageUpdate={handleMessageUpdate}
+        editingMessageId={editingMessageId}
+        editingText={editingText}
         selectedThread={selectedThread}
         selectedThreadId={selectedThreadId}
         setAdminFilter={setAdminFilter}
@@ -531,6 +636,7 @@ function App() {
         setAdminReply={setAdminReply}
         setAdminSection={setAdminSection}
         setAdminTagFilter={setAdminTagFilter}
+        setEditingText={setEditingText}
         setSelectedThreadId={setSelectedThreadId}
         setTagName={setTagName}
         statusCounts={statusCounts}
@@ -572,11 +678,19 @@ function App() {
       {isSupportOpen && studentProfile && (
         <SupportPanel
           currentThread={currentThread}
+          editingMessageId={editingMessageId}
+          editingText={editingText}
           form={form}
           handleCreateThread={handleCreateThread}
+          handleMessageDelete={handleMessageDelete}
+          handleMessageEditCancel={handleMessageEditCancel}
+          handleMessageEditStart={handleMessageEditStart}
+          handleMessageEmoji={handleMessageEmoji}
+          handleMessageUpdate={handleMessageUpdate}
           handleStudentSend={handleStudentSend}
           resetStudentProfile={resetStudentProfile}
           setCurrentThreadId={setCurrentThreadId}
+          setEditingText={setEditingText}
           setForm={setForm}
           setIsSupportOpen={setIsSupportOpen}
           setSupportView={setSupportView}
@@ -708,11 +822,19 @@ function StudentAuthModal({
 
 function SupportPanel({
   currentThread,
+  editingMessageId,
+  editingText,
   form,
   handleCreateThread,
+  handleMessageDelete,
+  handleMessageEditCancel,
+  handleMessageEditStart,
+  handleMessageEmoji,
+  handleMessageUpdate,
   handleStudentSend,
   resetStudentProfile,
   setCurrentThreadId,
+  setEditingText,
   setForm,
   setIsSupportOpen,
   setSupportView,
@@ -865,13 +987,19 @@ function SupportPanel({
 
           <div className="messages">
             {currentThread.messages.map((message) => (
-              <article className={`bubble ${message.author}`} key={message.id}>
-                <div>
-                  <strong>{message.authorLabel}</strong>
-                  <span>{message.time}</span>
-                </div>
-                <p>{message.text}</p>
-              </article>
+              <MessageBubble
+                actor="student"
+                editingMessageId={editingMessageId}
+                editingText={editingText}
+                key={message.id}
+                message={message}
+                onCancelEdit={handleMessageEditCancel}
+                onChangeEdit={setEditingText}
+                onDelete={() => handleMessageDelete(currentThread, message, "student")}
+                onEmoji={(emoji) => handleMessageEmoji(currentThread, message, "student", emoji)}
+                onSaveEdit={() => handleMessageUpdate(currentThread, message, "student")}
+                onStartEdit={() => handleMessageEditStart(message)}
+              />
             ))}
           </div>
 
@@ -879,15 +1007,17 @@ function SupportPanel({
             <button aria-label="첨부" className="plus-button" type="button">
               +
             </button>
-            <input
+            <textarea
               value={studentMessage}
               onChange={(event) => setStudentMessage(event.target.value)}
               onKeyDown={(event) => {
-                if (event.key === "Enter") {
+                if (event.key === "Enter" && !event.shiftKey) {
+                  event.preventDefault();
                   handleStudentSend();
                 }
               }}
               placeholder="추가 문의를 입력하세요..."
+              rows={1}
             />
             <button aria-label="전송" className="round-send" onClick={handleStudentSend} type="button">
               <ArrowUp size={22} />
@@ -957,6 +1087,90 @@ function TagAdminPanel({
   );
 }
 
+function MessageBubble({
+  actor,
+  editingMessageId,
+  editingText,
+  message,
+  onCancelEdit,
+  onChangeEdit,
+  onDelete,
+  onEmoji,
+  onSaveEdit,
+  onStartEdit,
+}) {
+  const isOwnMessage = message.author === actor;
+  const isEditing = editingMessageId === message.id;
+
+  return (
+    <article className={`bubble ${message.author}`} key={message.id}>
+      <div className="message-meta">
+        <strong>{message.authorLabel}</strong>
+        <span>
+          {message.time}
+          {message.editedAt ? " · 수정됨" : ""}
+        </span>
+      </div>
+
+      {isEditing ? (
+        <div className="message-edit-box">
+          <textarea
+            autoFocus
+            value={editingText}
+            onChange={(event) => onChangeEdit(event.target.value)}
+            onKeyDown={(event) => {
+              if (event.key === "Enter" && !event.shiftKey) {
+                event.preventDefault();
+                onSaveEdit();
+              }
+
+              if (event.key === "Escape") {
+                onCancelEdit();
+              }
+            }}
+            rows={3}
+          />
+          <div>
+            <button onClick={onCancelEdit} type="button">
+              취소
+            </button>
+            <button onClick={onSaveEdit} type="button">
+              저장
+            </button>
+          </div>
+        </div>
+      ) : (
+        <p>{message.text}</p>
+      )}
+
+      {message.emoji && <span className="message-emoji">{message.emoji}</span>}
+
+      <div className="message-actions">
+        {EMOJIS.map((emoji) => (
+          <button
+            className={message.emoji === emoji ? "active" : ""}
+            key={emoji}
+            onClick={() => onEmoji(emoji)}
+            type="button"
+          >
+            {emoji}
+          </button>
+        ))}
+        {isOwnMessage && !isEditing && (
+          <>
+            <button onClick={onStartEdit} type="button">
+              수정
+            </button>
+            <button onClick={onDelete} type="button">
+              삭제
+            </button>
+          </>
+        )}
+      </div>
+    </article>
+  );
+}
+
 function AdminScreen({
   adminAuthed,
   adminError,
@@ -971,6 +1185,13 @@ function AdminScreen({
   handleAdminReply,
   handleAdminStatusChange,
   handleDeleteTag,
+  handleMessageDelete,
+  handleMessageEditCancel,
+  handleMessageEditStart,
+  handleMessageEmoji,
+  handleMessageUpdate,
+  editingMessageId,
+  editingText,
   selectedThread,
   selectedThreadId,
   setAdminFilter,
@@ -979,6 +1200,7 @@ function AdminScreen({
   setAdminReply,
   setAdminSection,
   setAdminTagFilter,
+  setEditingText,
   setSelectedThreadId,
   setTagName,
   statusCounts,
@@ -1155,13 +1377,19 @@ function AdminScreen({
 
             <div className="messages admin-messages">
               {selectedThread.messages.map((message) => (
-                <article className={`bubble ${message.author}`} key={message.id}>
-                  <div>
-                    <strong>{message.authorLabel}</strong>
-                    <span>{message.time}</span>
-                  </div>
-                  <p>{message.text}</p>
-                </article>
+                <MessageBubble
+                  actor="admin"
+                  editingMessageId={editingMessageId}
+                  editingText={editingText}
+                  key={message.id}
+                  message={message}
+                  onCancelEdit={handleMessageEditCancel}
+                  onChangeEdit={setEditingText}
+                  onDelete={() => handleMessageDelete(selectedThread, message, "admin")}
+                  onEmoji={(emoji) => handleMessageEmoji(selectedThread, message, "admin", emoji)}
+                  onSaveEdit={() => handleMessageUpdate(selectedThread, message, "admin")}
+                  onStartEdit={() => handleMessageEditStart(message)}
+                />
               ))}
             </div>
 
@@ -1169,6 +1397,12 @@ function AdminScreen({
               <textarea
                 value={adminReply}
                 onChange={(event) => setAdminReply(event.target.value)}
+                onKeyDown={(event) => {
+                  if (event.key === "Enter" && !event.shiftKey) {
+                    event.preventDefault();
+                    handleAdminReply();
+                  }
+                }}
                 placeholder={`${adminName || "학생회"} 이름으로 답변하기`}
                 rows={4}
               />
