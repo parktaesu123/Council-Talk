@@ -16,3 +16,12 @@ npm run dev
 ```bash
 npm run build
 ```
+
+## 배포
+
+```bash
+docker compose up -d --build
+```
+
+어드민 화면은 `/admin`에서 접속합니다.
+기본 비밀번호는 `counciltalk`이며, 배포 시 `ADMIN_PASSWORD` 환경 변수로 바꿀 수 있습니다.

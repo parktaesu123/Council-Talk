@@ -1,50 +1,7 @@
-import { useState } from "react";
+import { ArrowUp, LockKeyhole, MessageCircle, RotateCcw, Send, UserRound, X } from "lucide-react";
+import { useEffect, useState } from "react";
 
-const initialThreads = [
-  {
-    id: 1,
-    studentId: "24014567",
-    name: "김민서",
-    title: "축제 부스 신청 일정 문의",
-    content: "동아리 부스 신청이 언제 열리는지 궁금합니다.",
-    status: "답변중",
-    lastActive: "방금 전",
-    messages: [
-      {
-        id: 1,
-        author: "student",
-        authorLabel: "김민서",
-        time: "10:02",
-        text: "동아리 부스 신청이 언제 열리는지 궁금합니다.",
-      },
-      {
-        id: 2,
-        author: "admin",
-        authorLabel: "학생회",
-        time: "10:05",
-        text: "이번 주 금요일 오후 6시에 공지될 예정입니다. 공지 채널도 함께 확인해 주세요.",
-      },
-    ],
-  },
-  {
-    id: 2,
-    studentId: "24017654",
-    name: "박준호",
-    title: "분실물 보관 장소",
-    content: "중앙 계단 쪽에서 지갑을 잃어버렸는데 접수된 게 있을까요?",
-    status: "대기중",
-    lastActive: "12분 전",
-    messages: [
-      {
-        id: 1,
-        author: "student",
-        authorLabel: "박준호",
-        time: "09:44",
-        text: "중앙 계단 쪽에서 지갑을 잃어버렸는데 접수된 게 있을까요?",
-      },
-    ],
-  },
-];
+const STORAGE_KEY = "council-talk-threads";
 
 const emptyForm = {
   studentId: "",
@@ -53,327 +10,530 @@ const emptyForm = {
   content: "",
 };
 
+const getTimeLabel = () =>
+  new Intl.DateTimeFormat("ko-KR", {
+    hour: "2-digit",
+    minute: "2-digit",
+  }).format(new Date());
+
+const loadThreads = () => {
+  try {
+    const saved = localStorage.getItem(STORAGE_KEY);
+    return saved ? JSON.parse(saved) : [];
+  } catch {
+    return [];
+  }
+};
+
+const apiRequest = async (path, options) => {
+  const response = await fetch(path, {
+    headers: {
+      "Content-Type": "application/json",
+      ...(options?.headers || {}),
+    },
+    ...options,
+  });
+
+  if (!response.ok) {
+    throw new Error(`Request failed: ${response.status}`);
+  }
+
+  return response.json();
+};
+
 function App() {
-  const [mode, setMode] = useState("user");
-  const [threads, setThreads] = useState(initialThreads);
-  const [selectedThreadId, setSelectedThreadId] = useState(initialThreads[0].id);
+  const [route, setRoute] = useState(() => window.location.pathname);
+  const [threads, setThreads] = useState(loadThreads);
+  const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
-  const [userChat, setUserChat] = useState("");
+  const [currentThreadId, setCurrentThreadId] = useState(null);
+  const [studentMessage, setStudentMessage] = useState("");
+  const [adminPassword, setAdminPassword] = useState("");
+  const [adminAuthed, setAdminAuthed] = useState(
+    () => sessionStorage.getItem("council-talk-admin") === "true",
+  );
+  const [adminName, setAdminName] = useState(
+    () => localStorage.getItem("council-talk-admin-name") || "학생회",
+  );
+  const [selectedThreadId, setSelectedThreadId] = useState(null);
   const [adminReply, setAdminReply] = useState("");
 
-  const selectedThread = threads.find((thread) => thread.id === selectedThreadId) ?? threads[0];
+  useEffect(() => {
+    const syncRoute = () => setRoute(window.location.pathname);
+    window.addEventListener("popstate", syncRoute);
+    return () => window.removeEventListener("popstate", syncRoute);
+  }, []);
 
-  const handleCreateThread = () => {
-    if (!form.studentId || !form.name || !form.title || !form.content) {
+  useEffect(() => {
+    apiRequest("/api/threads")
+      .then((data) => setThreads(data.threads))
+      .catch(() => {
+        setThreads(loadThreads());
+      });
+  }, []);
+
+  useEffect(() => {
+    localStorage.setItem(STORAGE_KEY, JSON.stringify(threads));
+  }, [threads]);
+
+  useEffect(() => {
+    localStorage.setItem("council-talk-admin-name", adminName);
+  }, [adminName]);
+
+  useEffect(() => {
+    if (!selectedThreadId && threads.length > 0) {
+      setSelectedThreadId(threads[0].id);
+    }
+  }, [selectedThreadId, threads]);
+
+  const currentThread = threads.find((thread) => thread.id === currentThreadId);
+  const selectedThread = threads.find((thread) => thread.id === selectedThreadId);
+  const isAdminRoute = route.startsWith("/admin");
+
+  const goTo = (path) => {
+    window.history.pushState({}, "", path);
+    setRoute(path);
+  };
+
+  const saveThreadsFallback = (updater) => {
+    setThreads((current) => {
+      const next = typeof updater === "function" ? updater(current) : updater;
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
+      return next;
+    });
+  };
+
+  const handleCreateThread = async (event) => {
+    event.preventDefault();
+    if (!form.studentId.trim() || !form.name.trim() || !form.title.trim() || !form.content.trim()) {
       return;
     }
 
-    const newThread = {
-      id: Date.now(),
-      studentId: form.studentId,
-      name: form.name,
-      title: form.title,
-      content: form.content,
-      status: "대기중",
-      lastActive: "방금 전",
-      messages: [
-        {
-          id: 1,
-          author: "student",
-          authorLabel: form.name,
-          time: "지금",
-          text: form.content,
-        },
-      ],
+    const payload = {
+      studentId: form.studentId.trim(),
+      name: form.name.trim(),
+      title: form.title.trim(),
+      content: form.content.trim(),
     };
 
-    setThreads((current) => [newThread, ...current]);
-    setSelectedThreadId(newThread.id);
+    let thread;
+    try {
+      const data = await apiRequest("/api/threads", {
+        method: "POST",
+        body: JSON.stringify(payload),
+      });
+      thread = data.thread;
+      setThreads(data.threads);
+    } catch {
+      thread = {
+        id: crypto.randomUUID(),
+        ...payload,
+        status: "대기중",
+        createdAt: new Date().toISOString(),
+        updatedAt: new Date().toISOString(),
+        messages: [
+          {
+            id: crypto.randomUUID(),
+            author: "student",
+            authorLabel: payload.name,
+            time: getTimeLabel(),
+            text: payload.content,
+          },
+        ],
+      };
+      saveThreadsFallback((current) => [thread, ...current]);
+    }
+
+    setCurrentThreadId(thread.id);
+    setSelectedThreadId(thread.id);
     setForm(emptyForm);
-    setMode("user");
   };
 
-  const handleUserChatSend = () => {
-    if (!userChat.trim() || !selectedThread) {
+  const handleStudentSend = async () => {
+    if (!currentThread || !studentMessage.trim()) {
       return;
     }
 
-    setThreads((current) =>
-      current.map((thread) =>
-        thread.id === selectedThread.id
-          ? {
-              ...thread,
-              status: "답변중",
-              lastActive: "방금 전",
-              messages: [
-                ...thread.messages,
-                {
-                  id: Date.now(),
-                  author: "student",
-                  authorLabel: thread.name,
-                  time: "지금",
-                  text: userChat.trim(),
-                },
-              ],
-            }
-          : thread,
-      ),
-    );
-    setUserChat("");
+    const text = studentMessage.trim();
+    try {
+      const data = await apiRequest(`/api/threads/${currentThread.id}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ author: "student", text }),
+      });
+      setThreads(data.threads);
+    } catch {
+      saveThreadsFallback((current) =>
+        current.map((thread) =>
+          thread.id === currentThread.id
+            ? {
+                ...thread,
+                status: "대기중",
+                updatedAt: new Date().toISOString(),
+                messages: [
+                  ...thread.messages,
+                  {
+                    id: crypto.randomUUID(),
+                    author: "student",
+                    authorLabel: thread.name,
+                    time: getTimeLabel(),
+                    text,
+                  },
+                ],
+              }
+            : thread,
+        ),
+      );
+    }
+    setStudentMessage("");
   };
 
-  const handleAdminReply = () => {
-    if (!adminReply.trim() || !selectedThread) {
+  const handleAdminLogin = async (event) => {
+    event.preventDefault();
+    try {
+      await apiRequest("/api/admin/login", {
+        method: "POST",
+        body: JSON.stringify({ password: adminPassword }),
+      });
+      sessionStorage.setItem("council-talk-admin", "true");
+      setAdminAuthed(true);
+      setAdminPassword("");
+      const data = await apiRequest("/api/threads");
+      setThreads(data.threads);
+    } catch {
+      setAdminPassword("");
+    }
+  };
+
+  const handleAdminReply = async () => {
+    if (!selectedThread || !adminReply.trim()) {
       return;
     }
 
-    setThreads((current) =>
-      current.map((thread) =>
-        thread.id === selectedThread.id
-          ? {
-              ...thread,
-              status: "답변완료",
-              lastActive: "방금 전",
-              messages: [
-                ...thread.messages,
-                {
-                  id: Date.now(),
-                  author: "admin",
-                  authorLabel: "학생회",
-                  time: "지금",
-                  text: adminReply.trim(),
-                },
-              ],
-            }
-          : thread,
-      ),
-    );
+    const text = adminReply.trim();
+    const authorLabel = adminName.trim() || "학생회";
+
+    try {
+      const data = await apiRequest(`/api/threads/${selectedThread.id}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ author: "admin", authorLabel, text }),
+      });
+      setThreads(data.threads);
+    } catch {
+      saveThreadsFallback((current) =>
+        current.map((thread) =>
+          thread.id === selectedThread.id
+            ? {
+                ...thread,
+                status: "답변완료",
+                updatedAt: new Date().toISOString(),
+                messages: [
+                  ...thread.messages,
+                  {
+                    id: crypto.randomUUID(),
+                    author: "admin",
+                    authorLabel,
+                    time: getTimeLabel(),
+                    text,
+                  },
+                ],
+              }
+            : thread,
+        ),
+      );
+    }
     setAdminReply("");
   };
 
+  if (isAdminRoute) {
+    return (
+      <AdminScreen
+        adminAuthed={adminAuthed}
+        adminName={adminName}
+        adminPassword={adminPassword}
+        adminReply={adminReply}
+        handleAdminLogin={handleAdminLogin}
+        handleAdminReply={handleAdminReply}
+        selectedThread={selectedThread}
+        selectedThreadId={selectedThreadId}
+        setAdminName={setAdminName}
+        setAdminPassword={setAdminPassword}
+        setAdminReply={setAdminReply}
+        setSelectedThreadId={setSelectedThreadId}
+        threads={threads}
+      />
+    );
+  }
+
   return (
-    <div className="app-shell">
-      <aside className="global-sidebar">
-        <div className="brand">
-          <div className="brand-mark">CT</div>
-          <div>
-            <p>Council Talk</p>
-            <span>학생회 문의 채널</span>
-          </div>
+    <main className="public-page">
+      <section className="logo-stage" aria-label="Council Talk">
+        <div className="wordmark">
+          <span className="wordmark-symbol">C</span>
+          <h1>Council Talk</h1>
         </div>
+      </section>
 
-        <nav className="mode-nav">
-          <button
-            className={mode === "user" ? "active" : ""}
-            onClick={() => setMode("user")}
-            type="button"
-          >
-            일반 학생
-          </button>
-          <button
-            className={mode === "admin" ? "active" : ""}
-            onClick={() => setMode("admin")}
-            type="button"
-          >
-            어드민
-          </button>
-        </nav>
+      <button className="support-launcher" onClick={() => setIsSupportOpen(true)} type="button">
+        <MessageCircle size={18} />
+        문의하기
+      </button>
 
-        <div className="sidebar-card">
-          <p>운영 상태</p>
-          <strong>{threads.length}건의 문의가 접수됨</strong>
-          <span>실시간 상담과 공지 대응을 한 화면에서 관리합니다.</span>
+      {isSupportOpen && (
+        <SupportPanel
+          currentThread={currentThread}
+          form={form}
+          handleCreateThread={handleCreateThread}
+          handleStudentSend={handleStudentSend}
+          setForm={setForm}
+          setIsSupportOpen={setIsSupportOpen}
+          setStudentMessage={setStudentMessage}
+          studentMessage={studentMessage}
+        />
+      )}
+    </main>
+  );
+}
+
+function SupportPanel({
+  currentThread,
+  form,
+  handleCreateThread,
+  handleStudentSend,
+  setForm,
+  setIsSupportOpen,
+  setStudentMessage,
+  studentMessage,
+}) {
+  return (
+    <aside className="support-panel" aria-label="문의하기">
+      <header className="support-header">
+        <button aria-label="처음으로" className="icon-button" type="button">
+          <RotateCcw size={21} />
+        </button>
+        <button
+          aria-label="닫기"
+          className="icon-button"
+          onClick={() => setIsSupportOpen(false)}
+          type="button"
+        >
+          <X size={22} />
+        </button>
+      </header>
+
+      {!currentThread ? (
+        <form className="support-form" onSubmit={handleCreateThread}>
+          <div className="support-title">
+            <h2>문의하기</h2>
+            <p>학생회가 확인할 수 있도록 필요한 정보만 남겨주세요.</p>
+          </div>
+
+          <div className="field-row">
+            <label>
+              학번
+              <input
+                value={form.studentId}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, studentId: event.target.value }))
+                }
+                placeholder="24014567"
+              />
+            </label>
+            <label>
+              이름
+              <input
+                value={form.name}
+                onChange={(event) =>
+                  setForm((current) => ({ ...current, name: event.target.value }))
+                }
+                placeholder="홍길동"
+              />
+            </label>
+          </div>
+
+          <label>
+            제목
+            <input
+              value={form.title}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, title: event.target.value }))
+              }
+              placeholder="무엇이 궁금한가요?"
+            />
+          </label>
+
+          <label>
+            내용
+            <textarea
+              value={form.content}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, content: event.target.value }))
+              }
+              placeholder="문의 내용을 입력해주세요."
+              rows={6}
+            />
+          </label>
+
+          <button className="black-button" type="submit">
+            문의 등록
+          </button>
+        </form>
+      ) : (
+        <>
+          <div className="conversation-title">
+            <strong>{currentThread.title}</strong>
+            <span>{currentThread.status}</span>
+          </div>
+
+          <div className="messages">
+            {currentThread.messages.map((message) => (
+              <article className={`bubble ${message.author}`} key={message.id}>
+                <div>
+                  <strong>{message.authorLabel}</strong>
+                  <span>{message.time}</span>
+                </div>
+                <p>{message.text}</p>
+              </article>
+            ))}
+          </div>
+
+          <div className="support-compose">
+            <button aria-label="첨부" className="plus-button" type="button">
+              +
+            </button>
+            <input
+              value={studentMessage}
+              onChange={(event) => setStudentMessage(event.target.value)}
+              onKeyDown={(event) => {
+                if (event.key === "Enter") {
+                  handleStudentSend();
+                }
+              }}
+              placeholder="추가 문의를 입력하세요..."
+            />
+            <button aria-label="전송" className="round-send" onClick={handleStudentSend} type="button">
+              <ArrowUp size={22} />
+            </button>
+          </div>
+        </>
+      )}
+    </aside>
+  );
+}
+
+function AdminScreen({
+  adminAuthed,
+  adminName,
+  adminPassword,
+  adminReply,
+  handleAdminLogin,
+  handleAdminReply,
+  selectedThread,
+  selectedThreadId,
+  setAdminName,
+  setAdminPassword,
+  setAdminReply,
+  setSelectedThreadId,
+  threads,
+}) {
+  if (!adminAuthed) {
+    return (
+      <main className="admin-login-page">
+        <form className="login-box" onSubmit={handleAdminLogin}>
+          <LockKeyhole size={25} />
+          <h1>Admin</h1>
+          <input
+            autoFocus
+            type="password"
+            value={adminPassword}
+            onChange={(event) => setAdminPassword(event.target.value)}
+            placeholder="비밀번호"
+          />
+          <button className="black-button" type="submit">
+            접속
+          </button>
+        </form>
+      </main>
+    );
+  }
+
+  return (
+    <main className="admin-page">
+      <aside className="inbox">
+        <header>
+          <h1>Council Talk</h1>
+          <span>{threads.length} inquiries</span>
+        </header>
+
+        <label className="admin-name">
+          <UserRound size={17} />
+          <input
+            value={adminName}
+            onChange={(event) => setAdminName(event.target.value)}
+            placeholder="답변자 이름"
+          />
+        </label>
+
+        <div className="thread-list">
+          {threads.length === 0 && <p className="empty-copy">아직 접수된 문의가 없습니다.</p>}
+          {threads.map((thread) => (
+            <button
+              className={thread.id === selectedThreadId ? "thread-item active" : "thread-item"}
+              key={thread.id}
+              onClick={() => setSelectedThreadId(thread.id)}
+              type="button"
+            >
+              <strong>{thread.title}</strong>
+              <span>
+                {thread.name} · {thread.studentId}
+              </span>
+              <small>{thread.status}</small>
+            </button>
+          ))}
         </div>
       </aside>
 
-      <main className="workspace">
-        <header className="workspace-header">
-          <div>
-            <h1>{mode === "user" ? "학생 문의 접수" : "학생회 상담 어드민"}</h1>
-            <p>
-              {mode === "user"
-                ? "질문 제목, 내용, 학번, 이름을 입력하고 바로 대화를 이어갈 수 있습니다."
-                : "문의 목록을 확인하고 학생에게 답변을 남겨 주세요."}
-            </p>
-          </div>
-          <div className="header-pill">Channel-like Monotone UI</div>
-        </header>
+      <section className="admin-conversation">
+        {selectedThread ? (
+          <>
+            <header className="conversation-head">
+              <div>
+                <h2>{selectedThread.title}</h2>
+                <p>
+                  {selectedThread.name} · {selectedThread.studentId}
+                </p>
+              </div>
+              <span>{selectedThread.status}</span>
+            </header>
 
-        {mode === "user" ? (
-          <section className="content-grid">
-            <div className="panel form-panel">
-              <div className="panel-head">
-                <h2>문의 작성</h2>
-                <span>새 상담 시작</span>
-              </div>
-              <div className="form-grid">
-                <label>
-                  <span>학번</span>
-                  <input
-                    value={form.studentId}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, studentId: event.target.value }))
-                    }
-                    placeholder="예: 24014567"
-                  />
-                </label>
-                <label>
-                  <span>이름</span>
-                  <input
-                    value={form.name}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, name: event.target.value }))
-                    }
-                    placeholder="이름을 입력하세요"
-                  />
-                </label>
-                <label className="full">
-                  <span>질문 제목</span>
-                  <input
-                    value={form.title}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, title: event.target.value }))
-                    }
-                    placeholder="무엇이 궁금한가요?"
-                  />
-                </label>
-                <label className="full">
-                  <span>질문 내용</span>
-                  <textarea
-                    value={form.content}
-                    onChange={(event) =>
-                      setForm((current) => ({ ...current, content: event.target.value }))
-                    }
-                    placeholder="문의 내용을 자세히 작성해 주세요"
-                    rows={6}
-                  />
-                </label>
-              </div>
-              <button className="primary-button" onClick={handleCreateThread} type="button">
-                문의 등록하기
+            <div className="messages admin-messages">
+              {selectedThread.messages.map((message) => (
+                <article className={`bubble ${message.author}`} key={message.id}>
+                  <div>
+                    <strong>{message.authorLabel}</strong>
+                    <span>{message.time}</span>
+                  </div>
+                  <p>{message.text}</p>
+                </article>
+              ))}
+            </div>
+
+            <footer className="admin-reply">
+              <textarea
+                value={adminReply}
+                onChange={(event) => setAdminReply(event.target.value)}
+                placeholder={`${adminName || "학생회"} 이름으로 답변하기`}
+                rows={4}
+              />
+              <button aria-label="답변 보내기" className="black-icon-button" onClick={handleAdminReply} type="button">
+                <Send size={19} />
               </button>
-            </div>
-
-            <div className="panel chat-panel">
-              <div className="panel-head">
-                <h2>내 문의 대화</h2>
-                <span>{selectedThread?.status ?? "대기중"}</span>
-              </div>
-
-              {selectedThread ? (
-                <>
-                  <div className="thread-summary">
-                    <strong>{selectedThread.title}</strong>
-                    <p>
-                      {selectedThread.name} · {selectedThread.studentId}
-                    </p>
-                  </div>
-                  <div className="message-list">
-                    {selectedThread.messages.map((message) => (
-                      <article
-                        className={`message-bubble ${message.author === "admin" ? "admin" : "student"}`}
-                        key={message.id}
-                      >
-                        <div className="message-meta">
-                          <strong>{message.authorLabel}</strong>
-                          <span>{message.time}</span>
-                        </div>
-                        <p>{message.text}</p>
-                      </article>
-                    ))}
-                  </div>
-                  <div className="chat-input-row">
-                    <input
-                      value={userChat}
-                      onChange={(event) => setUserChat(event.target.value)}
-                      placeholder="추가로 질문을 남겨보세요"
-                    />
-                    <button className="send-button" onClick={handleUserChatSend} type="button">
-                      전송
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="empty-state">등록된 문의가 없어요.</div>
-              )}
-            </div>
-          </section>
+            </footer>
+          </>
         ) : (
-          <section className="content-grid admin-grid">
-            <div className="panel inbox-panel">
-              <div className="panel-head">
-                <h2>문의함</h2>
-                <span>전체 {threads.length}</span>
-              </div>
-              <div className="inbox-list">
-                {threads.map((thread) => (
-                  <button
-                    className={`thread-card ${thread.id === selectedThread?.id ? "selected" : ""}`}
-                    key={thread.id}
-                    onClick={() => setSelectedThreadId(thread.id)}
-                    type="button"
-                  >
-                    <div className="thread-card-top">
-                      <strong>{thread.title}</strong>
-                      <span>{thread.status}</span>
-                    </div>
-                    <p>
-                      {thread.name} · {thread.studentId}
-                    </p>
-                    <small>{thread.lastActive}</small>
-                  </button>
-                ))}
-              </div>
-            </div>
-
-            <div className="panel admin-chat-panel">
-              {selectedThread ? (
-                <>
-                  <div className="panel-head">
-                    <div>
-                      <h2>{selectedThread.title}</h2>
-                      <span>
-                        {selectedThread.name} · {selectedThread.studentId}
-                      </span>
-                    </div>
-                    <div className={`status-badge ${selectedThread.status}`}>
-                      {selectedThread.status}
-                    </div>
-                  </div>
-                  <div className="message-list">
-                    {selectedThread.messages.map((message) => (
-                      <article
-                        className={`message-bubble ${message.author === "admin" ? "admin" : "student"}`}
-                        key={message.id}
-                      >
-                        <div className="message-meta">
-                          <strong>{message.authorLabel}</strong>
-                          <span>{message.time}</span>
-                        </div>
-                        <p>{message.text}</p>
-                      </article>
-                    ))}
-                  </div>
-                  <div className="chat-input-stack">
-                    <textarea
-                      value={adminReply}
-                      onChange={(event) => setAdminReply(event.target.value)}
-                      placeholder="학생에게 보낼 답변을 입력하세요"
-                      rows={5}
-                    />
-                    <button className="primary-button" onClick={handleAdminReply} type="button">
-                      답변 보내기
-                    </button>
-                  </div>
-                </>
-              ) : (
-                <div className="empty-state">선택된 문의가 없습니다.</div>
-              )}
-            </div>
-          </section>
+          <div className="empty-conversation">문의를 선택하세요.</div>
         )}
-      </main>
-    </div>
+      </section>
+    </main>
   );
 }
 

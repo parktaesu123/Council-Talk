@@ -6,5 +6,12 @@ services:
     image: council-talk:latest
     container_name: council-talk
     restart: unless-stopped
+    environment:
+      NODE_ENV: production
+      PORT: "3000"
+      ADMIN_PASSWORD: "${ADMIN_PASSWORD:-counciltalk}"
+      DATA_DIR: /app/data
     ports:
-      - "${APP_HOST:-0.0.0.0}:${APP_PORT:-8792}:80"
+      - "${APP_HOST:-0.0.0.0}:${APP_PORT:-8792}:3000"
+    volumes:
+      - ./data:/app/data

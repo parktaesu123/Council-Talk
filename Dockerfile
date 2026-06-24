@@ -8,13 +8,23 @@ RUN npm ci
 COPY index.html vite.config.js ./
 COPY src ./src
 RUN npm run build
+RUN npm prune --omit=dev
 
-FROM nginx:1.27-alpine
+FROM node:22-alpine
 
-COPY nginx.conf /etc/nginx/conf.d/default.conf
-COPY --from=build /app/dist /usr/share/nginx/html
+WORKDIR /app
 
-EXPOSE 80
+ENV NODE_ENV=production
+ENV PORT=3000
+ENV DATA_DIR=/app/data
+
+COPY --from=build /app/node_modules ./node_modules
+COPY --from=build /app/dist ./dist
+COPY package.json server.js ./
+
+EXPOSE 3000
 
 HEALTHCHECK --interval=15s --timeout=5s --retries=5 --start-period=10s \
-  CMD wget -q -O - http://127.0.0.1/healthz >/dev/null 2>&1 || exit 1
+  CMD wget -q -O - http://127.0.0.1:3000/healthz >/dev/null 2>&1 || exit 1
+
+CMD ["node", "server.js"]
