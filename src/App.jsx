@@ -1,4 +1,14 @@
-import { ArrowUp, LockKeyhole, MessageCircle, Plus, RotateCcw, Send, UserRound, X } from "lucide-react";
+import {
+  ArrowUp,
+  LockKeyhole,
+  MessageCircle,
+  Plus,
+  RotateCcw,
+  Send,
+  Trash2,
+  UserRound,
+  X,
+} from "lucide-react";
 import { useEffect, useState } from "react";
 
 const STORAGE_KEY = "council-talk-threads";
@@ -15,6 +25,7 @@ const emptyForm = {
   name: "",
   title: "",
   content: "",
+  tagId: "",
 };
 
 const emptyIdentity = {
@@ -61,9 +72,12 @@ const normalizeStatus = (status) => {
   return STATUS_LABELS.includes(status) ? status : "미완료";
 };
 
+const normalizeTags = (tags) => (Array.isArray(tags) ? tags : []);
+
 function App() {
   const [route, setRoute] = useState(() => window.location.pathname);
   const [threads, setThreads] = useState(loadThreads);
+  const [tags, setTags] = useState([]);
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [currentThreadId, setCurrentThreadId] = useState(null);
@@ -89,12 +103,19 @@ function App() {
   const [selectedThreadId, setSelectedThreadId] = useState(null);
   const [adminReply, setAdminReply] = useState("");
   const [adminFilter, setAdminFilter] = useState("all");
+  const [tagName, setTagName] = useState("");
   const isAdminRoute = route.startsWith("/admin");
 
   useEffect(() => {
     const syncRoute = () => setRoute(window.location.pathname);
     window.addEventListener("popstate", syncRoute);
     return () => window.removeEventListener("popstate", syncRoute);
+  }, []);
+
+  useEffect(() => {
+    apiRequest("/api/tags")
+      .then((data) => setTags(normalizeTags(data.tags)))
+      .catch(() => setTags([]));
   }, []);
 
   useEffect(() => {
@@ -208,6 +229,9 @@ function App() {
       .then((data) => {
         setStudentProfile(profile);
         setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+        apiRequest("/api/tags")
+          .then((tagData) => setTags(normalizeTags(tagData.tags)))
+          .catch(() => {});
         setForm((current) => ({ ...current, studentId, name }));
         setSupportView("rooms");
       })
@@ -234,6 +258,7 @@ function App() {
       pin: studentProfile?.pin,
       title: form.title.trim(),
       content: form.content.trim(),
+      tagId: form.tagId,
     };
 
     if (
@@ -258,6 +283,7 @@ function App() {
       thread = {
         id: crypto.randomUUID(),
         ...payload,
+        tagName: tags.find((tag) => tag.id === payload.tagId)?.name || "",
         status: "미완료",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
@@ -338,6 +364,8 @@ function App() {
       setAdminPassword("");
       const data = await apiRequest("/api/threads");
       setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+      const tagData = await apiRequest("/api/tags");
+      setTags(normalizeTags(tagData.tags));
     } catch {
       setAdminError("비밀번호가 틀렸습니다.");
       setAdminPassword("");
@@ -384,6 +412,38 @@ function App() {
     setAdminReply("");
   };
 
+  const handleCreateTag = async (event) => {
+    event.preventDefault();
+    const name = tagName.trim();
+
+    if (!name) {
+      return;
+    }
+
+    try {
+      const data = await apiRequest("/api/tags", {
+        method: "POST",
+        body: JSON.stringify({ name }),
+      });
+      setTags(normalizeTags(data.tags));
+      setTagName("");
+    } catch {
+      setTagName("");
+    }
+  };
+
+  const handleDeleteTag = async (tagId) => {
+    try {
+      const data = await apiRequest(`/api/tags/${tagId}`, {
+        method: "DELETE",
+      });
+      setTags(normalizeTags(data.tags));
+      setForm((current) => (current.tagId === tagId ? { ...current, tagId: "" } : current));
+    } catch {
+      setTags((current) => current.filter((tag) => tag.id !== tagId));
+    }
+  };
+
   const handleAdminStatusChange = async (status) => {
     if (!selectedThread) {
       return;
@@ -415,9 +475,11 @@ function App() {
         adminName={adminName}
         adminPassword={adminPassword}
         adminReply={adminReply}
+        handleCreateTag={handleCreateTag}
         handleAdminLogin={handleAdminLogin}
         handleAdminReply={handleAdminReply}
         handleAdminStatusChange={handleAdminStatusChange}
+        handleDeleteTag={handleDeleteTag}
         selectedThread={selectedThread}
         selectedThreadId={selectedThreadId}
         setAdminFilter={setAdminFilter}
@@ -425,7 +487,10 @@ function App() {
         setAdminPassword={setAdminPassword}
         setAdminReply={setAdminReply}
         setSelectedThreadId={setSelectedThreadId}
+        setTagName={setTagName}
         statusCounts={statusCounts}
+        tagName={tagName}
+        tags={tags}
         threads={filteredAdminThreads}
       />
     );
@@ -465,6 +530,7 @@ function App() {
           studentThreads={studentThreads}
           studentMessage={studentMessage}
           supportView={supportView}
+          tags={tags}
         />
       )}
     </main>
@@ -490,6 +556,7 @@ function SupportPanel({
   studentThreads,
   studentMessage,
   supportView,
+  tags,
 }) {
   const openNewInquiry = () => {
     setCurrentThreadId(null);
@@ -500,6 +567,7 @@ function SupportPanel({
       name: studentProfile?.name || current.name,
       title: "",
       content: "",
+      tagId: "",
     }));
   };
 
@@ -636,6 +704,23 @@ function SupportPanel({
           </div>
 
           <label>
+            문의 태그
+            <select
+              value={form.tagId}
+              onChange={(event) =>
+                setForm((current) => ({ ...current, tagId: event.target.value }))
+              }
+            >
+              <option value="">태그 선택</option>
+              {tags.map((tag) => (
+                <option key={tag.id} value={tag.id}>
+                  {tag.name}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          <label>
             제목
             <input
               value={form.title}
@@ -672,6 +757,7 @@ function SupportPanel({
             </button>
             <strong>{currentThread.title}</strong>
             <span>{currentThread.status}</span>
+            {currentThread.tagName && <em>{currentThread.tagName}</em>}
           </div>
 
           <div className="messages">
@@ -717,9 +803,11 @@ function AdminScreen({
   adminName,
   adminPassword,
   adminReply,
+  handleCreateTag,
   handleAdminLogin,
   handleAdminReply,
   handleAdminStatusChange,
+  handleDeleteTag,
   selectedThread,
   selectedThreadId,
   setAdminFilter,
@@ -727,7 +815,10 @@ function AdminScreen({
   setAdminPassword,
   setAdminReply,
   setSelectedThreadId,
+  setTagName,
   statusCounts,
+  tagName,
+  tags,
   threads,
 }) {
   if (!adminAuthed) {
@@ -786,6 +877,39 @@ function AdminScreen({
           ))}
         </div>
 
+        <section className="tag-manager" aria-label="문의 태그 관리">
+          <div>
+            <strong>문의 태그</strong>
+            <span>{tags.length}개</span>
+          </div>
+          <form onSubmit={handleCreateTag}>
+            <input
+              maxLength={24}
+              value={tagName}
+              onChange={(event) => setTagName(event.target.value)}
+              placeholder="예: 급식, 시설, 행사"
+            />
+            <button aria-label="태그 생성" type="submit">
+              <Plus size={17} />
+            </button>
+          </form>
+          <div className="tag-list">
+            {tags.length === 0 && <p>아직 생성된 태그가 없습니다.</p>}
+            {tags.map((tag) => (
+              <span className="tag-chip editable" key={tag.id}>
+                {tag.name}
+                <button
+                  aria-label={`${tag.name} 태그 삭제`}
+                  onClick={() => handleDeleteTag(tag.id)}
+                  type="button"
+                >
+                  <Trash2 size={13} />
+                </button>
+              </span>
+            ))}
+          </div>
+        </section>
+
         <div className="thread-list">
           {threads.length === 0 && <p className="empty-copy">아직 접수된 문의가 없습니다.</p>}
           {threads.map((thread) => (
@@ -799,6 +923,7 @@ function AdminScreen({
               <span>
                 {thread.name} · {thread.studentId}
               </span>
+              {thread.tagName && <em>{thread.tagName}</em>}
               <small>{normalizeStatus(thread.status)}</small>
             </button>
           ))}
@@ -814,6 +939,7 @@ function AdminScreen({
                 <p>
                   {selectedThread.name} · {selectedThread.studentId}
                 </p>
+                {selectedThread.tagName && <span className="tag-chip">{selectedThread.tagName}</span>}
               </div>
               <span>{normalizeStatus(selectedThread.status)}</span>
             </header>

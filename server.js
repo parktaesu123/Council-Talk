@@ -11,8 +11,10 @@ const adminPassword = process.env.ADMIN_PASSWORD || "counciltalk";
 const dataDir = process.env.DATA_DIR || path.join(__dirname, "data");
 const dataFile = path.join(dataDir, "threads.json");
 const studentsFile = path.join(dataDir, "students.json");
+const tagsFile = path.join(dataDir, "tags.json");
 const staticDir = path.join(__dirname, "dist");
 let operationQueue = Promise.resolve();
+let tagOperationQueue = Promise.resolve();
 
 app.use(express.json());
 
@@ -51,6 +53,21 @@ const writeStudents = async (students) => {
   await writeFile(studentsFile, JSON.stringify(students, null, 2));
 };
 
+const readTags = async () => {
+  try {
+    const raw = await readFile(tagsFile, "utf8");
+    const tags = JSON.parse(raw);
+    return Array.isArray(tags) ? tags : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeTags = async (tags) => {
+  await mkdir(dataDir, { recursive: true });
+  await writeFile(tagsFile, JSON.stringify(tags, null, 2));
+};
+
 const normalizeStudent = ({ studentId, name }) => ({
   studentId: String(studentId || "").trim(),
   name: String(name || "").trim(),
@@ -77,6 +94,20 @@ const enqueueThreadUpdate = async (operation) => {
   operationQueue = result.catch(() => {});
   return result;
 };
+
+const enqueueTagUpdate = async (operation) => {
+  const result = tagOperationQueue.then(async () => {
+    const tags = await readTags();
+    const value = await operation(tags);
+    await writeTags(tags);
+    return value;
+  });
+
+  tagOperationQueue = result.catch(() => {});
+  return result;
+};
+
+const normalizeTagName = (name) => String(name || "").trim().slice(0, 24);
 
 const ensureStudentSession = async ({ studentId, name, pin }) => {
   const profile = normalizeStudent({ studentId, name });
@@ -120,6 +151,50 @@ app.get("/api/threads", async (_request, response) => {
   });
 });
 
+app.get("/api/tags", async (_request, response) => {
+  response.json({ tags: await readTags() });
+});
+
+app.post("/api/tags", async (request, response) => {
+  const name = normalizeTagName(request.body?.name);
+
+  if (!name) {
+    response.status(400).json({ message: "Missing tag name" });
+    return;
+  }
+
+  const tags = await enqueueTagUpdate(async (currentTags) => {
+    const existing = currentTags.find((tag) => tag.name === name);
+
+    if (existing) {
+      return currentTags;
+    }
+
+    currentTags.push({
+      id: crypto.randomUUID(),
+      name,
+      createdAt: new Date().toISOString(),
+    });
+    return currentTags;
+  });
+
+  response.status(201).json({ tags });
+});
+
+app.delete("/api/tags/:id", async (request, response) => {
+  const tags = await enqueueTagUpdate(async (currentTags) => {
+    const index = currentTags.findIndex((tag) => tag.id === request.params.id);
+
+    if (index >= 0) {
+      currentTags.splice(index, 1);
+    }
+
+    return currentTags;
+  });
+
+  response.json({ tags });
+});
+
 app.post("/api/students/session", async (request, response) => {
   const profile = await ensureStudentSession(request.body || {});
 
@@ -139,7 +214,7 @@ app.post("/api/students/session", async (request, response) => {
 });
 
 app.post("/api/threads", async (request, response) => {
-  const { studentId, name, title, content } = request.body || {};
+  const { title, content, tagId } = request.body || {};
   const profile = await ensureStudentSession(request.body || {});
 
   if (!profile || !title || !content) {
@@ -148,11 +223,15 @@ app.post("/api/threads", async (request, response) => {
   }
 
   const now = new Date().toISOString();
+  const tags = await readTags();
+  const selectedTag = tags.find((tag) => tag.id === tagId);
   const thread = {
     id: crypto.randomUUID(),
     studentId: profile.studentId,
     name: profile.name,
     title: String(title).trim(),
+    tagId: selectedTag?.id || "",
+    tagName: selectedTag?.name || "",
     status: "미완료",
     createdAt: now,
     updatedAt: now,
