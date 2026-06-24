@@ -104,6 +104,8 @@ function App() {
   const [selectedThreadId, setSelectedThreadId] = useState(null);
   const [adminReply, setAdminReply] = useState("");
   const [adminFilter, setAdminFilter] = useState("all");
+  const [adminTagFilter, setAdminTagFilter] = useState("all");
+  const [adminSection, setAdminSection] = useState("inquiries");
   const [tagName, setTagName] = useState("");
   const isAdminRoute = route.startsWith("/admin");
 
@@ -163,19 +165,20 @@ function App() {
   }, [selectedThreadId, threads]);
 
   useEffect(() => {
-    if (adminFilter === "all") {
-      return;
-    }
+    const visibleThreads = threads.filter((thread) => {
+      const statusMatches = adminFilter === "all" || normalizeStatus(thread.status) === adminFilter;
+      const tagMatches =
+        adminTagFilter === "all" ||
+        (adminTagFilter === "untagged" ? !thread.tagId : thread.tagId === adminTagFilter);
 
-    const visibleThreads = threads.filter(
-      (thread) => normalizeStatus(thread.status) === adminFilter,
-    );
+      return statusMatches && tagMatches;
+    });
     const selectedIsVisible = visibleThreads.some((thread) => thread.id === selectedThreadId);
 
     if (!selectedIsVisible) {
       setSelectedThreadId(visibleThreads[0]?.id || null);
     }
-  }, [adminFilter, selectedThreadId, threads]);
+  }, [adminFilter, adminTagFilter, selectedThreadId, threads]);
 
   const currentThread = threads.find((thread) => thread.id === currentThreadId);
   const selectedThread = threads.find((thread) => thread.id === selectedThreadId);
@@ -186,9 +189,14 @@ function App() {
       )
     : [];
   const filteredAdminThreads =
-    adminFilter === "all"
-      ? threads
-      : threads.filter((thread) => normalizeStatus(thread.status) === adminFilter);
+    threads.filter((thread) => {
+      const statusMatches = adminFilter === "all" || normalizeStatus(thread.status) === adminFilter;
+      const tagMatches =
+        adminTagFilter === "all" ||
+        (adminTagFilter === "untagged" ? !thread.tagId : thread.tagId === adminTagFilter);
+
+      return statusMatches && tagMatches;
+    });
   const statusCounts = threads.reduce(
     (counts, thread) => {
       counts.all += 1;
@@ -196,6 +204,20 @@ function App() {
       return counts;
     },
     { all: 0, 미완료: 0, 진행중: 0, 완료: 0 },
+  );
+  const tagCounts = threads.reduce(
+    (counts, thread) => {
+      counts.all += 1;
+
+      if (thread.tagId) {
+        counts[thread.tagId] = (counts[thread.tagId] || 0) + 1;
+      } else {
+        counts.untagged += 1;
+      }
+
+      return counts;
+    },
+    { all: 0, untagged: 0 },
   );
   const goTo = (path) => {
     window.history.pushState({}, "", path);
@@ -494,6 +516,8 @@ function App() {
         adminName={adminName}
         adminPassword={adminPassword}
         adminReply={adminReply}
+        adminSection={adminSection}
+        adminTagFilter={adminTagFilter}
         handleCreateTag={handleCreateTag}
         handleAdminLogin={handleAdminLogin}
         handleAdminReply={handleAdminReply}
@@ -505,9 +529,12 @@ function App() {
         setAdminName={setAdminName}
         setAdminPassword={setAdminPassword}
         setAdminReply={setAdminReply}
+        setAdminSection={setAdminSection}
+        setAdminTagFilter={setAdminTagFilter}
         setSelectedThreadId={setSelectedThreadId}
         setTagName={setTagName}
         statusCounts={statusCounts}
+        tagCounts={tagCounts}
         tagName={tagName}
         tags={tags}
         threads={filteredAdminThreads}
@@ -872,6 +899,64 @@ function SupportPanel({
   );
 }
 
+function TagAdminPanel({
+  handleCreateTag,
+  handleDeleteTag,
+  setTagName,
+  tagCounts,
+  tagName,
+  tags,
+}) {
+  return (
+    <div className="tag-admin-page">
+      <header>
+        <div>
+          <p>Tag Manager</p>
+          <h2>문의 태그 관리</h2>
+        </div>
+        <span>{tags.length}개 태그</span>
+      </header>
+
+      <form className="tag-create-card" onSubmit={handleCreateTag}>
+        <div>
+          <strong>새 태그 만들기</strong>
+          <p>학생이 문의를 등록할 때 선택할 수 있는 분류를 추가합니다.</p>
+        </div>
+        <div>
+          <input
+            maxLength={24}
+            value={tagName}
+            onChange={(event) => setTagName(event.target.value)}
+            placeholder="예: 급식, 시설, 행사"
+          />
+          <button className="black-button" type="submit">
+            생성
+          </button>
+        </div>
+      </form>
+
+      <section className="tag-admin-grid">
+        {tags.length === 0 && (
+          <p className="empty-copy">아직 생성된 태그가 없습니다.</p>
+        )}
+        {tags.map((tag) => (
+          <article className="tag-admin-card" key={tag.id}>
+            <div>
+              <span className="tag-chip">{tag.name}</span>
+              <strong>{tagCounts[tag.id] || 0}건</strong>
+            </div>
+            <p>이 태그로 접수된 문의 수입니다. 삭제해도 기존 문의의 태그명은 기록으로 남습니다.</p>
+            <button onClick={() => handleDeleteTag(tag.id)} type="button">
+              <Trash2 size={15} />
+              삭제
+            </button>
+          </article>
+        ))}
+      </section>
+    </div>
+  );
+}
+
 function AdminScreen({
   adminAuthed,
   adminError,
@@ -879,6 +964,8 @@ function AdminScreen({
   adminName,
   adminPassword,
   adminReply,
+  adminSection,
+  adminTagFilter,
   handleCreateTag,
   handleAdminLogin,
   handleAdminReply,
@@ -890,9 +977,12 @@ function AdminScreen({
   setAdminName,
   setAdminPassword,
   setAdminReply,
+  setAdminSection,
+  setAdminTagFilter,
   setSelectedThreadId,
   setTagName,
   statusCounts,
+  tagCounts,
   tagName,
   tags,
   threads,
@@ -927,8 +1017,25 @@ function AdminScreen({
             <span className="wordmark-symbol" aria-hidden="true">C</span>
             <h1>Council Talk</h1>
           </div>
-          <span>{threads.length} inquiries</span>
+          <span>{statusCounts.all} inquiries</span>
         </header>
+
+        <nav className="admin-nav" aria-label="어드민 메뉴">
+          <button
+            className={adminSection === "inquiries" ? "active" : ""}
+            onClick={() => setAdminSection("inquiries")}
+            type="button"
+          >
+            문의 관리
+          </button>
+          <button
+            className={adminSection === "tags" ? "active" : ""}
+            onClick={() => setAdminSection("tags")}
+            type="button"
+          >
+            태그 관리
+          </button>
+        </nav>
 
         <label className="admin-name">
           <UserRound size={17} />
@@ -939,75 +1046,88 @@ function AdminScreen({
           />
         </label>
 
-        <div className="status-filters">
-          {FILTERS.map((filter) => (
-            <button
-              className={adminFilter === filter.value ? "active" : ""}
-              key={filter.value}
-              onClick={() => setAdminFilter(filter.value)}
-              type="button"
-            >
-              {filter.label}
-              <span>{statusCounts[filter.value]}</span>
-            </button>
-          ))}
-        </div>
-
-        <section className="tag-manager" aria-label="문의 태그 관리">
-          <div>
-            <strong>문의 태그</strong>
-            <span>{tags.length}개</span>
-          </div>
-          <form onSubmit={handleCreateTag}>
-            <input
-              maxLength={24}
-              value={tagName}
-              onChange={(event) => setTagName(event.target.value)}
-              placeholder="예: 급식, 시설, 행사"
-            />
-            <button aria-label="태그 생성" type="submit">
-              <Plus size={17} />
-            </button>
-          </form>
-          <div className="tag-list">
-            {tags.length === 0 && <p>아직 생성된 태그가 없습니다.</p>}
-            {tags.map((tag) => (
-              <span className="tag-chip editable" key={tag.id}>
-                {tag.name}
+        {adminSection === "inquiries" && (
+          <>
+            <div className="status-filters">
+              {FILTERS.map((filter) => (
                 <button
-                  aria-label={`${tag.name} 태그 삭제`}
-                  onClick={() => handleDeleteTag(tag.id)}
+                  className={adminFilter === filter.value ? "active" : ""}
+                  key={filter.value}
+                  onClick={() => setAdminFilter(filter.value)}
                   type="button"
                 >
-                  <Trash2 size={13} />
+                  {filter.label}
+                  <span>{statusCounts[filter.value]}</span>
                 </button>
-              </span>
-            ))}
-          </div>
-        </section>
+              ))}
+            </div>
 
-        <div className="thread-list">
-          {threads.length === 0 && <p className="empty-copy">아직 접수된 문의가 없습니다.</p>}
-          {threads.map((thread) => (
-            <button
-              className={thread.id === selectedThreadId ? "thread-item active" : "thread-item"}
-              key={thread.id}
-              onClick={() => setSelectedThreadId(thread.id)}
-              type="button"
-            >
-              <strong>{thread.title}</strong>
-              <span>
-                {thread.name} · {thread.studentId}
-              </span>
-              {thread.tagName && <em>{thread.tagName}</em>}
-              <small>{normalizeStatus(thread.status)}</small>
-            </button>
-          ))}
-        </div>
+            <section className="tag-filter-panel" aria-label="태그별 문의 조회">
+              <strong>태그별 조회</strong>
+              <div>
+                <button
+                  className={adminTagFilter === "all" ? "active" : ""}
+                  onClick={() => setAdminTagFilter("all")}
+                  type="button"
+                >
+                  전체
+                  <span>{tagCounts.all}</span>
+                </button>
+                <button
+                  className={adminTagFilter === "untagged" ? "active" : ""}
+                  onClick={() => setAdminTagFilter("untagged")}
+                  type="button"
+                >
+                  태그 없음
+                  <span>{tagCounts.untagged}</span>
+                </button>
+                {tags.map((tag) => (
+                  <button
+                    className={adminTagFilter === tag.id ? "active" : ""}
+                    key={tag.id}
+                    onClick={() => setAdminTagFilter(tag.id)}
+                    type="button"
+                  >
+                    {tag.name}
+                    <span>{tagCounts[tag.id] || 0}</span>
+                  </button>
+                ))}
+              </div>
+            </section>
+
+            <div className="thread-list">
+              {threads.length === 0 && <p className="empty-copy">조건에 맞는 문의가 없습니다.</p>}
+              {threads.map((thread) => (
+                <button
+                  className={thread.id === selectedThreadId ? "thread-item active" : "thread-item"}
+                  key={thread.id}
+                  onClick={() => setSelectedThreadId(thread.id)}
+                  type="button"
+                >
+                  <strong>{thread.title}</strong>
+                  <span>
+                    {thread.name} · {thread.studentId}
+                  </span>
+                  {thread.tagName && <em>{thread.tagName}</em>}
+                  <small>{normalizeStatus(thread.status)}</small>
+                </button>
+              ))}
+            </div>
+          </>
+        )}
       </aside>
 
       <section className="admin-conversation">
-        {selectedThread ? (
+        {adminSection === "tags" ? (
+          <TagAdminPanel
+            handleCreateTag={handleCreateTag}
+            handleDeleteTag={handleDeleteTag}
+            setTagName={setTagName}
+            tagCounts={tagCounts}
+            tagName={tagName}
+            tags={tags}
+          />
+        ) : selectedThread ? (
           <>
             <header className="conversation-head">
               <div>
