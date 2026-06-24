@@ -1,0 +1,10 @@
+services:
+  council-talk:
+    build:
+      context: .
+      dockerfile: Dockerfile
+    image: council-talk:latest
+    container_name: council-talk
+    restart: unless-stopped
+    ports:
+      - "${APP_HOST:-0.0.0.0}:${APP_PORT:-8792}:80"
