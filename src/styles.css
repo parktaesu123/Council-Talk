@@ -253,6 +253,15 @@ textarea:focus {
   font-weight: 700;
 }
 
+.switch-student-button {
+  height: 38px;
+  margin-top: 8px;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+}
+
 .support-title {
   margin: auto 0 14px;
   text-align: center;
@@ -474,6 +483,38 @@ textarea:focus {
   padding: 0;
 }
 
+.status-filters {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 8px;
+  padding: 0 18px 18px;
+}
+
+.status-filters button {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-width: 0;
+  height: 38px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #ffffff;
+  color: var(--ink);
+  font-size: 13px;
+}
+
+.status-filters button.active {
+  border-color: var(--black);
+  background: var(--black);
+  color: #ffffff;
+}
+
+.status-filters span {
+  color: inherit;
+  opacity: 0.7;
+}
+
 .thread-list {
   display: flex;
   flex: 1;
@@ -540,6 +581,29 @@ textarea:focus {
   border-radius: 999px;
   color: var(--muted);
   font-size: 13px;
+}
+
+.status-actions {
+  display: flex;
+  gap: 8px;
+  padding: 14px 30px;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.status-actions button {
+  height: 34px;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--muted);
+  font-size: 13px;
+}
+
+.status-actions button.active {
+  border-color: var(--black);
+  background: var(--black);
+  color: #ffffff;
 }
 
 .admin-messages {

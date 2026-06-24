@@ -2,6 +2,13 @@ import { ArrowUp, LockKeyhole, MessageCircle, Plus, RotateCcw, Send, UserRound, 
 import { useEffect, useState } from "react";
 
 const STORAGE_KEY = "council-talk-threads";
+const STATUS_LABELS = ["미완료", "진행중", "완료"];
+const FILTERS = [
+  { label: "전체", value: "all" },
+  { label: "미완료", value: "미완료" },
+  { label: "진행중", value: "진행중" },
+  { label: "완료", value: "완료" },
+];
 
 const emptyForm = {
   studentId: "",
@@ -41,6 +48,13 @@ const apiRequest = async (path, options) => {
   return response.json();
 };
 
+const normalizeStatus = (status) => {
+  if (status === "답변완료") return "완료";
+  if (status === "답변중") return "진행중";
+  if (status === "대기중") return "미완료";
+  return STATUS_LABELS.includes(status) ? status : "미완료";
+};
+
 function App() {
   const [route, setRoute] = useState(() => window.location.pathname);
   const [threads, setThreads] = useState(loadThreads);
@@ -54,7 +68,11 @@ function App() {
       return null;
     }
   });
-  const [supportView, setSupportView] = useState("rooms");
+  const [identityForm, setIdentityForm] = useState(() => ({
+    studentId: "",
+    name: "",
+  }));
+  const [supportView, setSupportView] = useState(() => (studentProfile ? "rooms" : "identify"));
   const [studentMessage, setStudentMessage] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [adminAuthed, setAdminAuthed] = useState(
@@ -65,6 +83,7 @@ function App() {
   );
   const [selectedThreadId, setSelectedThreadId] = useState(null);
   const [adminReply, setAdminReply] = useState("");
+  const [adminFilter, setAdminFilter] = useState("all");
 
   useEffect(() => {
     const syncRoute = () => setRoute(window.location.pathname);
@@ -74,7 +93,14 @@ function App() {
 
   useEffect(() => {
     apiRequest("/api/threads")
-      .then((data) => setThreads(data.threads))
+      .then((data) =>
+        setThreads(
+          data.threads.map((thread) => ({
+            ...thread,
+            status: normalizeStatus(thread.status),
+          })),
+        ),
+      )
       .catch(() => {
         setThreads(loadThreads());
       });
@@ -100,6 +126,21 @@ function App() {
     }
   }, [selectedThreadId, threads]);
 
+  useEffect(() => {
+    if (adminFilter === "all") {
+      return;
+    }
+
+    const visibleThreads = threads.filter(
+      (thread) => normalizeStatus(thread.status) === adminFilter,
+    );
+    const selectedIsVisible = visibleThreads.some((thread) => thread.id === selectedThreadId);
+
+    if (!selectedIsVisible) {
+      setSelectedThreadId(visibleThreads[0]?.id || null);
+    }
+  }, [adminFilter, selectedThreadId, threads]);
+
   const currentThread = threads.find((thread) => thread.id === currentThreadId);
   const selectedThread = threads.find((thread) => thread.id === selectedThreadId);
   const studentThreads = studentProfile
@@ -108,6 +149,18 @@ function App() {
           thread.studentId === studentProfile.studentId && thread.name === studentProfile.name,
       )
     : [];
+  const filteredAdminThreads =
+    adminFilter === "all"
+      ? threads
+      : threads.filter((thread) => normalizeStatus(thread.status) === adminFilter);
+  const statusCounts = threads.reduce(
+    (counts, thread) => {
+      counts.all += 1;
+      counts[normalizeStatus(thread.status)] += 1;
+      return counts;
+    },
+    { all: 0, 미완료: 0, 진행중: 0, 완료: 0 },
+  );
   const isAdminRoute = route.startsWith("/admin");
 
   const goTo = (path) => {
@@ -123,6 +176,29 @@ function App() {
     });
   };
 
+  const handleIdentifyStudent = (event) => {
+    event.preventDefault();
+    const studentId = identityForm.studentId.trim();
+    const name = identityForm.name.trim();
+
+    if (!/^\d{4}$/.test(studentId) || !name) {
+      return;
+    }
+
+    const profile = { studentId, name };
+    setStudentProfile(profile);
+    setForm((current) => ({ ...current, ...profile }));
+    setSupportView("rooms");
+  };
+
+  const resetStudentProfile = () => {
+    localStorage.removeItem("council-talk-student");
+    setStudentProfile(null);
+    setCurrentThreadId(null);
+    setIdentityForm({ studentId: "", name: "" });
+    setSupportView("identify");
+  };
+
   const handleCreateThread = async (event) => {
     event.preventDefault();
     if (
@@ -135,8 +211,8 @@ function App() {
     }
 
     const payload = {
-      studentId: form.studentId.trim(),
-      name: form.name.trim(),
+      studentId: studentProfile?.studentId || form.studentId.trim(),
+      name: studentProfile?.name || form.name.trim(),
       title: form.title.trim(),
       content: form.content.trim(),
     };
@@ -153,7 +229,7 @@ function App() {
       thread = {
         id: crypto.randomUUID(),
         ...payload,
-        status: "대기중",
+        status: "미완료",
         createdAt: new Date().toISOString(),
         updatedAt: new Date().toISOString(),
         messages: [
@@ -194,7 +270,7 @@ function App() {
           thread.id === currentThread.id
             ? {
                 ...thread,
-                status: "대기중",
+                status: "미완료",
                 updatedAt: new Date().toISOString(),
                 messages: [
                   ...thread.messages,
@@ -225,7 +301,7 @@ function App() {
       setAdminAuthed(true);
       setAdminPassword("");
       const data = await apiRequest("/api/threads");
-      setThreads(data.threads);
+                  setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
     } catch {
       setAdminPassword("");
     }
@@ -251,7 +327,7 @@ function App() {
           thread.id === selectedThread.id
             ? {
                 ...thread,
-                status: "답변완료",
+                status: "진행중",
                 updatedAt: new Date().toISOString(),
                 messages: [
                   ...thread.messages,
@@ -271,22 +347,48 @@ function App() {
     setAdminReply("");
   };
 
+  const handleAdminStatusChange = async (status) => {
+    if (!selectedThread) {
+      return;
+    }
+
+    try {
+      const data = await apiRequest(`/api/threads/${selectedThread.id}/status`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+    } catch {
+      saveThreadsFallback((current) =>
+        current.map((thread) =>
+          thread.id === selectedThread.id
+            ? { ...thread, status, updatedAt: new Date().toISOString() }
+            : thread,
+        ),
+      );
+    }
+  };
+
   if (isAdminRoute) {
     return (
       <AdminScreen
         adminAuthed={adminAuthed}
+        adminFilter={adminFilter}
         adminName={adminName}
         adminPassword={adminPassword}
         adminReply={adminReply}
         handleAdminLogin={handleAdminLogin}
         handleAdminReply={handleAdminReply}
+        handleAdminStatusChange={handleAdminStatusChange}
         selectedThread={selectedThread}
         selectedThreadId={selectedThreadId}
+        setAdminFilter={setAdminFilter}
         setAdminName={setAdminName}
         setAdminPassword={setAdminPassword}
         setAdminReply={setAdminReply}
         setSelectedThreadId={setSelectedThreadId}
-        threads={threads}
+        statusCounts={statusCounts}
+        threads={filteredAdminThreads}
       />
     );
   }
@@ -310,9 +412,13 @@ function App() {
           currentThread={currentThread}
           form={form}
           handleCreateThread={handleCreateThread}
+          handleIdentifyStudent={handleIdentifyStudent}
           handleStudentSend={handleStudentSend}
+          identityForm={identityForm}
+          resetStudentProfile={resetStudentProfile}
           setCurrentThreadId={setCurrentThreadId}
           setForm={setForm}
+          setIdentityForm={setIdentityForm}
           setIsSupportOpen={setIsSupportOpen}
           setSupportView={setSupportView}
           setStudentMessage={setStudentMessage}
@@ -330,9 +436,13 @@ function SupportPanel({
   currentThread,
   form,
   handleCreateThread,
+  handleIdentifyStudent,
   handleStudentSend,
+  identityForm,
+  resetStudentProfile,
   setCurrentThreadId,
   setForm,
+  setIdentityForm,
   setIsSupportOpen,
   setSupportView,
   setStudentMessage,
@@ -374,11 +484,55 @@ function SupportPanel({
         </button>
       </header>
 
+      {supportView === "identify" && (
+        <form className="support-form identify-form" onSubmit={handleIdentifyStudent}>
+          <div className="support-title">
+            <h2>본인 확인</h2>
+            <p>학번과 이름이 같으면 이전 문의방을 다시 볼 수 있습니다.</p>
+          </div>
+
+          <div className="field-row">
+            <label>
+              학번
+              <input
+                inputMode="numeric"
+                maxLength={4}
+                pattern="[0-9]{4}"
+                value={identityForm.studentId}
+                onChange={(event) =>
+                  setIdentityForm((current) => ({
+                    ...current,
+                    studentId: event.target.value.replace(/\D/g, "").slice(0, 4),
+                  }))
+                }
+                placeholder="3105"
+              />
+            </label>
+            <label>
+              이름
+              <input
+                value={identityForm.name}
+                onChange={(event) =>
+                  setIdentityForm((current) => ({ ...current, name: event.target.value }))
+                }
+                placeholder="홍길동"
+              />
+            </label>
+          </div>
+
+          <button className="black-button" type="submit">
+            문의방 보기
+          </button>
+        </form>
+      )}
+
       {supportView === "rooms" && (
         <div className="rooms-view">
           <div className="support-title rooms-title">
             <h2>문의방</h2>
-            <p>문의마다 대화방이 따로 만들어집니다.</p>
+            <p>
+              {studentProfile?.name} · {studentProfile?.studentId}
+            </p>
           </div>
 
           <div className="student-room-list">
@@ -406,6 +560,9 @@ function SupportPanel({
             <Plus size={18} />
             새 문의하기
           </button>
+          <button className="switch-student-button" onClick={resetStudentProfile} type="button">
+            다른 학번으로 조회
+          </button>
         </div>
       )}
 
@@ -413,36 +570,9 @@ function SupportPanel({
         <form className="support-form" onSubmit={handleCreateThread}>
           <div className="support-title">
             <h2>문의하기</h2>
-            <p>학생회가 확인할 수 있도록 필요한 정보만 남겨주세요.</p>
-          </div>
-
-          <div className="field-row">
-            <label>
-              학번
-              <input
-                inputMode="numeric"
-                maxLength={4}
-                pattern="[0-9]{4}"
-                value={form.studentId}
-                onChange={(event) =>
-                  setForm((current) => ({
-                    ...current,
-                    studentId: event.target.value.replace(/\D/g, "").slice(0, 4),
-                  }))
-                }
-                placeholder="3105"
-              />
-            </label>
-            <label>
-              이름
-              <input
-                value={form.name}
-                onChange={(event) =>
-                  setForm((current) => ({ ...current, name: event.target.value }))
-                }
-                placeholder="홍길동"
-              />
-            </label>
+            <p>
+              {studentProfile?.name} · {studentProfile?.studentId}
+            </p>
           </div>
 
           <label>
@@ -522,17 +652,21 @@ function SupportPanel({
 
 function AdminScreen({
   adminAuthed,
+  adminFilter,
   adminName,
   adminPassword,
   adminReply,
   handleAdminLogin,
   handleAdminReply,
+  handleAdminStatusChange,
   selectedThread,
   selectedThreadId,
+  setAdminFilter,
   setAdminName,
   setAdminPassword,
   setAdminReply,
   setSelectedThreadId,
+  statusCounts,
   threads,
 }) {
   if (!adminAuthed) {
@@ -573,6 +707,20 @@ function AdminScreen({
           />
         </label>
 
+        <div className="status-filters">
+          {FILTERS.map((filter) => (
+            <button
+              className={adminFilter === filter.value ? "active" : ""}
+              key={filter.value}
+              onClick={() => setAdminFilter(filter.value)}
+              type="button"
+            >
+              {filter.label}
+              <span>{statusCounts[filter.value]}</span>
+            </button>
+          ))}
+        </div>
+
         <div className="thread-list">
           {threads.length === 0 && <p className="empty-copy">아직 접수된 문의가 없습니다.</p>}
           {threads.map((thread) => (
@@ -586,7 +734,7 @@ function AdminScreen({
               <span>
                 {thread.name} · {thread.studentId}
               </span>
-              <small>{thread.status}</small>
+              <small>{normalizeStatus(thread.status)}</small>
             </button>
           ))}
         </div>
@@ -602,8 +750,21 @@ function AdminScreen({
                   {selectedThread.name} · {selectedThread.studentId}
                 </p>
               </div>
-              <span>{selectedThread.status}</span>
+              <span>{normalizeStatus(selectedThread.status)}</span>
             </header>
+
+            <div className="status-actions">
+              {STATUS_LABELS.map((status) => (
+                <button
+                  className={normalizeStatus(selectedThread.status) === status ? "active" : ""}
+                  key={status}
+                  onClick={() => handleAdminStatusChange(status)}
+                  type="button"
+                >
+                  {status}
+                </button>
+              ))}
+            </div>
 
             <div className="messages admin-messages">
               {selectedThread.messages.map((message) => (
