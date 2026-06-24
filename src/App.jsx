@@ -105,7 +105,12 @@ function App() {
 
   const handleCreateThread = async (event) => {
     event.preventDefault();
-    if (!form.studentId.trim() || !form.name.trim() || !form.title.trim() || !form.content.trim()) {
+    if (
+      !/^\d{4}$/.test(form.studentId.trim()) ||
+      !form.name.trim() ||
+      !form.title.trim() ||
+      !form.content.trim()
+    ) {
       return;
     }
 
@@ -331,11 +336,17 @@ function SupportPanel({
             <label>
               학번
               <input
+                inputMode="numeric"
+                maxLength={4}
+                pattern="[0-9]{4}"
                 value={form.studentId}
                 onChange={(event) =>
-                  setForm((current) => ({ ...current, studentId: event.target.value }))
+                  setForm((current) => ({
+                    ...current,
+                    studentId: event.target.value.replace(/\D/g, "").slice(0, 4),
+                  }))
                 }
-                placeholder="24014567"
+                placeholder="3105"
               />
             </label>
             <label>
