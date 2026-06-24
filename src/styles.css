@@ -29,6 +29,10 @@ body,
   margin: 0;
 }
 
+body {
+  overflow-x: hidden;
+}
+
 button,
 input,
 textarea {
@@ -292,6 +296,14 @@ textarea:focus {
   color: #474747;
   font-size: 13px;
   font-weight: 700;
+}
+
+.form-error {
+  margin: -4px 0 0;
+  color: #c0372b;
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.45;
 }
 
 .field-row {
@@ -696,5 +708,114 @@ textarea:focus {
 
   .black-icon-button {
     width: 100%;
+  }
+}
+
+@media (max-width: 980px) {
+  .admin-page {
+    grid-template-columns: 320px 1fr;
+  }
+
+  .conversation-head {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+}
+
+@media (max-width: 620px) {
+  .public-page {
+    justify-content: flex-start;
+    gap: 26px;
+    padding: 28vh 20px 0;
+  }
+
+  .wordmark-symbol {
+    width: 56px;
+    height: 56px;
+    font-size: 30px;
+  }
+
+  .wordmark h1 {
+    font-size: 32px;
+  }
+
+  .support-launcher {
+    width: min(220px, 100%);
+  }
+
+  .support-panel {
+    right: 0;
+    bottom: 0;
+    width: 100vw;
+    height: 100dvh;
+    border-radius: 0;
+    border-left: 0;
+    border-right: 0;
+  }
+
+  .support-header {
+    padding: 14px 16px;
+  }
+
+  .support-form,
+  .rooms-view {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+
+  .messages {
+    padding: 18px;
+  }
+
+  .bubble {
+    max-width: 92%;
+  }
+
+  .support-compose {
+    margin: 0 12px 12px;
+  }
+
+  .status-filters {
+    grid-template-columns: repeat(4, minmax(74px, 1fr));
+    overflow-x: auto;
+  }
+
+  .inbox header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .thread-item {
+    padding: 16px 18px;
+  }
+
+  .conversation-head,
+  .admin-messages,
+  .status-actions {
+    padding-left: 18px;
+    padding-right: 18px;
+  }
+}
+
+@media (max-width: 420px) {
+  .wordmark {
+    gap: 12px;
+  }
+
+  .wordmark h1 {
+    font-size: 28px;
+  }
+
+  .support-title h2 {
+    font-size: 24px;
+  }
+
+  .support-compose {
+    grid-template-columns: 30px 1fr 38px;
+  }
+
+  .round-send {
+    width: 38px;
+    height: 38px;
   }
 }

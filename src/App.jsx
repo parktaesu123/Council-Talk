@@ -75,9 +75,11 @@ function App() {
     }
   });
   const [identityForm, setIdentityForm] = useState(emptyIdentity);
+  const [identityError, setIdentityError] = useState("");
   const [supportView, setSupportView] = useState(() => (studentProfile ? "rooms" : "identify"));
   const [studentMessage, setStudentMessage] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
+  const [adminError, setAdminError] = useState("");
   const [adminAuthed, setAdminAuthed] = useState(
     () => sessionStorage.getItem("council-talk-admin") === "true",
   );
@@ -193,9 +195,11 @@ function App() {
     const pin = identityForm.pin.trim();
 
     if (!/^\d{4}$/.test(studentId) || !name || !/^\d{4}$/.test(pin)) {
+      setIdentityError("학번, 이름, 4자리 비밀번호를 확인해주세요.");
       return;
     }
 
+    setIdentityError("");
     const profile = { studentId, name, pin };
     apiRequest("/api/students/session", {
       method: "POST",
@@ -207,7 +211,10 @@ function App() {
         setForm((current) => ({ ...current, studentId, name }));
         setSupportView("rooms");
       })
-      .catch(() => setIdentityForm((current) => ({ ...current, pin: "" })));
+      .catch(() => {
+        setIdentityError("비밀번호가 틀렸거나 학생 정보를 확인할 수 없습니다.");
+        setIdentityForm((current) => ({ ...current, pin: "" }));
+      });
   };
 
   const resetStudentProfile = () => {
@@ -215,6 +222,7 @@ function App() {
     setStudentProfile(null);
     setCurrentThreadId(null);
     setIdentityForm(emptyIdentity);
+    setIdentityError("");
     setSupportView("identify");
   };
 
@@ -319,6 +327,7 @@ function App() {
 
   const handleAdminLogin = async (event) => {
     event.preventDefault();
+    setAdminError("");
     try {
       await apiRequest("/api/admin/login", {
         method: "POST",
@@ -330,6 +339,7 @@ function App() {
       const data = await apiRequest("/api/threads");
       setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
     } catch {
+      setAdminError("비밀번호가 틀렸습니다.");
       setAdminPassword("");
     }
   };
@@ -400,6 +410,7 @@ function App() {
     return (
       <AdminScreen
         adminAuthed={adminAuthed}
+        adminError={adminError}
         adminFilter={adminFilter}
         adminName={adminName}
         adminPassword={adminPassword}
@@ -441,6 +452,7 @@ function App() {
           handleCreateThread={handleCreateThread}
           handleIdentifyStudent={handleIdentifyStudent}
           handleStudentSend={handleStudentSend}
+          identityError={identityError}
           identityForm={identityForm}
           resetStudentProfile={resetStudentProfile}
           setCurrentThreadId={setCurrentThreadId}
@@ -465,6 +477,7 @@ function SupportPanel({
   handleCreateThread,
   handleIdentifyStudent,
   handleStudentSend,
+  identityError,
   identityForm,
   resetStudentProfile,
   setCurrentThreadId,
@@ -564,6 +577,8 @@ function SupportPanel({
               placeholder="1234"
             />
           </label>
+
+          {identityError && <p className="form-error">{identityError}</p>}
 
           <button className="black-button" type="submit">
             문의방 보기
@@ -697,6 +712,7 @@ function SupportPanel({
 
 function AdminScreen({
   adminAuthed,
+  adminError,
   adminFilter,
   adminName,
   adminPassword,
@@ -727,6 +743,7 @@ function AdminScreen({
             onChange={(event) => setAdminPassword(event.target.value)}
             placeholder="비밀번호"
           />
+          {adminError && <p className="form-error">{adminError}</p>}
           <button className="black-button" type="submit">
             접속
           </button>
