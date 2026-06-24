@@ -1,9 +1,9 @@
 import {
+  ArrowLeft,
   ArrowUp,
   LockKeyhole,
   MessageCircle,
   Plus,
-  RotateCcw,
   Send,
   Trash2,
   UserRound,
@@ -861,14 +861,16 @@ function SupportPanel({
   return (
     <aside className="support-panel" aria-label="문의하기">
       <header className="support-header">
-        <button
-          aria-label="문의 목록"
-          className="icon-button"
-          onClick={() => setSupportView("rooms")}
-          type="button"
-        >
-          <RotateCcw size={21} />
-        </button>
+        {supportView !== "rooms" && (
+          <button
+            aria-label="문의방 목록으로 돌아가기"
+            className="icon-button back-icon-button"
+            onClick={() => setSupportView("rooms")}
+            type="button"
+          >
+            <ArrowLeft size={22} />
+          </button>
+        )}
         <button
           aria-label="닫기"
           className="icon-button"
@@ -914,7 +916,7 @@ function SupportPanel({
             새 문의하기
           </button>
           <button className="switch-student-button" onClick={resetStudentProfile} type="button">
-            다른 학번으로 조회
+            로그아웃
           </button>
         </div>
       )}
