@@ -90,7 +90,8 @@ function App() {
   });
   const [identityForm, setIdentityForm] = useState(emptyIdentity);
   const [identityError, setIdentityError] = useState("");
-  const [supportView, setSupportView] = useState(() => (studentProfile ? "rooms" : "identify"));
+  const [authMode, setAuthMode] = useState("login");
+  const [supportView, setSupportView] = useState("rooms");
   const [studentMessage, setStudentMessage] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [adminError, setAdminError] = useState("");
@@ -209,6 +210,18 @@ function App() {
     });
   };
 
+  const completeStudentAuth = (profile, data) => {
+    setStudentProfile(profile);
+    setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+    apiRequest("/api/tags")
+      .then((tagData) => setTags(normalizeTags(tagData.tags)))
+      .catch(() => {});
+    setForm((current) => ({ ...current, studentId: profile.studentId, name: profile.name }));
+    setIdentityError("");
+    setSupportView("rooms");
+    setIsSupportOpen(true);
+  };
+
   const handleIdentifyStudent = (event) => {
     event.preventDefault();
     const studentId = identityForm.studentId.trim();
@@ -222,23 +235,26 @@ function App() {
 
     setIdentityError("");
     const profile = { studentId, name, pin };
-    apiRequest("/api/students/session", {
+    apiRequest(authMode === "signup" ? "/api/students/signup" : "/api/students/session", {
       method: "POST",
       body: JSON.stringify(profile),
     })
-      .then((data) => {
-        setStudentProfile(profile);
-        setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
-        apiRequest("/api/tags")
-          .then((tagData) => setTags(normalizeTags(tagData.tags)))
-          .catch(() => {});
-        setForm((current) => ({ ...current, studentId, name }));
-        setSupportView("rooms");
-      })
+      .then((data) => completeStudentAuth(profile, data))
       .catch(() => {
-        setIdentityError("비밀번호가 틀렸거나 학생 정보를 확인할 수 없습니다.");
+        setIdentityError(
+          authMode === "signup"
+            ? "이미 가입된 정보이거나 입력값을 확인해주세요."
+            : "가입 정보가 없거나 비밀번호가 틀렸습니다.",
+        );
         setIdentityForm((current) => ({ ...current, pin: "" }));
       });
+  };
+
+  const openSupport = () => {
+    setIdentityError("");
+    setAuthMode("login");
+    setSupportView("rooms");
+    setIsSupportOpen(true);
   };
 
   const resetStudentProfile = () => {
@@ -247,7 +263,8 @@ function App() {
     setCurrentThreadId(null);
     setIdentityForm(emptyIdentity);
     setIdentityError("");
-    setSupportView("identify");
+    setAuthMode("login");
+    setSupportView("rooms");
   };
 
   const handleCreateThread = async (event) => {
@@ -505,24 +522,33 @@ function App() {
         </div>
       </section>
 
-      <button className="support-launcher" onClick={() => setIsSupportOpen(true)} type="button">
+      <button className="support-launcher" onClick={openSupport} type="button">
         <MessageCircle size={18} />
         문의하기
       </button>
 
-      {isSupportOpen && (
+      {isSupportOpen && !studentProfile && (
+        <StudentAuthModal
+          authMode={authMode}
+          handleIdentifyStudent={handleIdentifyStudent}
+          identityError={identityError}
+          identityForm={identityForm}
+          setAuthMode={setAuthMode}
+          setIdentityError={setIdentityError}
+          setIdentityForm={setIdentityForm}
+          setIsSupportOpen={setIsSupportOpen}
+        />
+      )}
+
+      {isSupportOpen && studentProfile && (
         <SupportPanel
           currentThread={currentThread}
           form={form}
           handleCreateThread={handleCreateThread}
-          handleIdentifyStudent={handleIdentifyStudent}
           handleStudentSend={handleStudentSend}
-          identityError={identityError}
-          identityForm={identityForm}
           resetStudentProfile={resetStudentProfile}
           setCurrentThreadId={setCurrentThreadId}
           setForm={setForm}
-          setIdentityForm={setIdentityForm}
           setIsSupportOpen={setIsSupportOpen}
           setSupportView={setSupportView}
           setStudentMessage={setStudentMessage}
@@ -537,18 +563,126 @@ function App() {
   );
 }
 
+function StudentAuthModal({
+  authMode,
+  handleIdentifyStudent,
+  identityError,
+  identityForm,
+  setAuthMode,
+  setIdentityError,
+  setIdentityForm,
+  setIsSupportOpen,
+}) {
+  const isSignup = authMode === "signup";
+
+  const switchMode = (mode) => {
+    setAuthMode(mode);
+    setIdentityError("");
+    setIdentityForm((current) => ({ ...current, pin: "" }));
+  };
+
+  return (
+    <div className="modal-backdrop" role="presentation">
+      <form className="student-auth-modal" onSubmit={handleIdentifyStudent}>
+        <header>
+          <div>
+            <span className="mini-logo">C</span>
+            <h2>{isSignup ? "회원가입" : "로그인"}</h2>
+          </div>
+          <button
+            aria-label="닫기"
+            className="icon-button"
+            onClick={() => setIsSupportOpen(false)}
+            type="button"
+          >
+            <X size={20} />
+          </button>
+        </header>
+
+        <p>
+          {isSignup
+            ? "처음 이용하는 경우 정보를 등록해주세요."
+            : "문의 내역을 보려면 로그인해주세요."}
+        </p>
+
+        <label>
+          이름
+          <input
+            autoFocus
+            value={identityForm.name}
+            onChange={(event) =>
+              setIdentityForm((current) => ({ ...current, name: event.target.value }))
+            }
+            placeholder="홍길동"
+          />
+        </label>
+
+        <label>
+          학번
+          <input
+            inputMode="numeric"
+            maxLength={4}
+            pattern="[0-9]{4}"
+            value={identityForm.studentId}
+            onChange={(event) =>
+              setIdentityForm((current) => ({
+                ...current,
+                studentId: event.target.value.replace(/\D/g, "").slice(0, 4),
+              }))
+            }
+            placeholder="3105"
+          />
+        </label>
+
+        <label>
+          4자리 비밀번호
+          <input
+            inputMode="numeric"
+            maxLength={4}
+            pattern="[0-9]{4}"
+            type="password"
+            value={identityForm.pin}
+            onChange={(event) =>
+              setIdentityForm((current) => ({
+                ...current,
+                pin: event.target.value.replace(/\D/g, "").slice(0, 4),
+              }))
+            }
+            placeholder="1234"
+          />
+        </label>
+
+        {identityError && <p className="form-error">{identityError}</p>}
+
+        <div className="auth-actions">
+          <button className="ghost-button" onClick={() => setIsSupportOpen(false)} type="button">
+            취소
+          </button>
+          <button className="black-button" type="submit">
+            {isSignup ? "가입 완료" : "로그인"}
+          </button>
+        </div>
+
+        <button
+          className="auth-mode-button"
+          onClick={() => switchMode(isSignup ? "login" : "signup")}
+          type="button"
+        >
+          {isSignup ? "이미 계정이 있어요" : "회원가입"}
+        </button>
+      </form>
+    </div>
+  );
+}
+
 function SupportPanel({
   currentThread,
   form,
   handleCreateThread,
-  handleIdentifyStudent,
   handleStudentSend,
-  identityError,
-  identityForm,
   resetStudentProfile,
   setCurrentThreadId,
   setForm,
-  setIdentityForm,
   setIsSupportOpen,
   setSupportView,
   setStudentMessage,
@@ -591,68 +725,6 @@ function SupportPanel({
           <X size={22} />
         </button>
       </header>
-
-      {supportView === "identify" && (
-        <form className="support-form identify-form" onSubmit={handleIdentifyStudent}>
-          <div className="support-title">
-            <h2>본인 확인</h2>
-            <p>학번과 이름이 같으면 이전 문의방을 다시 볼 수 있습니다.</p>
-          </div>
-
-          <div className="field-row">
-            <label>
-              학번
-              <input
-                inputMode="numeric"
-                maxLength={4}
-                pattern="[0-9]{4}"
-                value={identityForm.studentId}
-                onChange={(event) =>
-                  setIdentityForm((current) => ({
-                    ...current,
-                    studentId: event.target.value.replace(/\D/g, "").slice(0, 4),
-                  }))
-                }
-                placeholder="3105"
-              />
-            </label>
-            <label>
-              이름
-              <input
-                value={identityForm.name}
-                onChange={(event) =>
-                  setIdentityForm((current) => ({ ...current, name: event.target.value }))
-                }
-                placeholder="홍길동"
-              />
-            </label>
-          </div>
-
-          <label>
-            4자리 비밀번호
-            <input
-              inputMode="numeric"
-              maxLength={4}
-              pattern="[0-9]{4}"
-              type="password"
-              value={identityForm.pin}
-              onChange={(event) =>
-                setIdentityForm((current) => ({
-                  ...current,
-                  pin: event.target.value.replace(/\D/g, "").slice(0, 4),
-                }))
-              }
-              placeholder="1234"
-            />
-          </label>
-
-          {identityError && <p className="form-error">{identityError}</p>}
-
-          <button className="black-button" type="submit">
-            문의방 보기
-          </button>
-        </form>
-      )}
 
       {supportView === "rooms" && (
         <div className="rooms-view">

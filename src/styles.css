@@ -155,6 +155,98 @@ textarea:focus {
   font-weight: 800;
 }
 
+.modal-backdrop {
+  position: fixed;
+  inset: 0;
+  z-index: 20;
+  display: grid;
+  place-items: center;
+  padding: 20px;
+  background: rgba(255, 255, 255, 0.74);
+  backdrop-filter: blur(10px);
+}
+
+.student-auth-modal {
+  display: grid;
+  width: min(390px, 100%);
+  gap: 14px;
+  padding: 24px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: var(--shadow);
+}
+
+.student-auth-modal header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 16px;
+}
+
+.student-auth-modal header > div {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+}
+
+.mini-logo {
+  display: grid;
+  width: 34px;
+  height: 34px;
+  place-items: center;
+  border-radius: 7px;
+  background: var(--black);
+  color: #ffffff;
+  font-weight: 800;
+}
+
+.student-auth-modal h2 {
+  margin: 0;
+  font-size: 25px;
+}
+
+.student-auth-modal p {
+  margin: -2px 0 4px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.student-auth-modal label {
+  display: grid;
+  gap: 7px;
+  color: #474747;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.auth-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 2px;
+}
+
+.ghost-button {
+  height: 48px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #ffffff;
+  color: var(--ink);
+  font-weight: 700;
+}
+
+.auth-mode-button {
+  width: fit-content;
+  justify-self: center;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .support-panel {
   position: fixed;
   right: 28px;
@@ -843,6 +935,14 @@ textarea:focus {
     width: min(220px, 100%);
   }
 
+  .modal-backdrop {
+    padding: 14px;
+  }
+
+  .student-auth-modal {
+    padding: 20px;
+  }
+
   .support-panel {
     right: 0;
     bottom: 0;
@@ -908,6 +1008,10 @@ textarea:focus {
 
   .support-title h2 {
     font-size: 24px;
+  }
+
+  .auth-actions {
+    grid-template-columns: 1fr;
   }
 
   .support-compose {

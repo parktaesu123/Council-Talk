@@ -109,7 +109,7 @@ const enqueueTagUpdate = async (operation) => {
 
 const normalizeTagName = (name) => String(name || "").trim().slice(0, 24);
 
-const ensureStudentSession = async ({ studentId, name, pin }) => {
+const ensureStudentSession = async ({ studentId, name, pin }, { createIfMissing = false } = {}) => {
   const profile = normalizeStudent({ studentId, name });
   const cleanPin = String(pin || "").trim();
 
@@ -125,6 +125,10 @@ const ensureStudentSession = async ({ studentId, name, pin }) => {
     return null;
   }
 
+  if (!saved && !createIfMissing) {
+    return null;
+  }
+
   if (!saved) {
     students[key] = {
       ...profile,
@@ -135,6 +139,12 @@ const ensureStudentSession = async ({ studentId, name, pin }) => {
   }
 
   return profile;
+};
+
+const studentExists = async ({ studentId, name }) => {
+  const profile = normalizeStudent({ studentId, name });
+  const students = await readStudents();
+  return Boolean(students[studentKey(profile)]);
 };
 
 app.get("/healthz", (_request, response) => {
@@ -211,6 +221,22 @@ app.post("/api/students/session", async (request, response) => {
     }));
 
   response.json({ profile, threads });
+});
+
+app.post("/api/students/signup", async (request, response) => {
+  if (await studentExists(request.body || {})) {
+    response.status(409).json({ message: "Student already exists" });
+    return;
+  }
+
+  const profile = await ensureStudentSession(request.body || {}, { createIfMissing: true });
+
+  if (!profile) {
+    response.status(400).json({ message: "Invalid student credentials" });
+    return;
+  }
+
+  response.status(201).json({ profile, threads: [] });
 });
 
 app.post("/api/threads", async (request, response) => {
