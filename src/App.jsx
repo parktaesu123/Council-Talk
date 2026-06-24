@@ -17,6 +17,12 @@ const emptyForm = {
   content: "",
 };
 
+const emptyIdentity = {
+  studentId: "",
+  name: "",
+  pin: "",
+};
+
 const getTimeLabel = () =>
   new Intl.DateTimeFormat("ko-KR", {
     hour: "2-digit",
@@ -63,15 +69,12 @@ function App() {
   const [currentThreadId, setCurrentThreadId] = useState(null);
   const [studentProfile, setStudentProfile] = useState(() => {
     try {
-      return JSON.parse(localStorage.getItem("council-talk-student") || "null") || null;
+      return JSON.parse(sessionStorage.getItem("council-talk-student") || "null") || null;
     } catch {
       return null;
     }
   });
-  const [identityForm, setIdentityForm] = useState(() => ({
-    studentId: "",
-    name: "",
-  }));
+  const [identityForm, setIdentityForm] = useState(emptyIdentity);
   const [supportView, setSupportView] = useState(() => (studentProfile ? "rooms" : "identify"));
   const [studentMessage, setStudentMessage] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
@@ -84,6 +87,7 @@ function App() {
   const [selectedThreadId, setSelectedThreadId] = useState(null);
   const [adminReply, setAdminReply] = useState("");
   const [adminFilter, setAdminFilter] = useState("all");
+  const isAdminRoute = route.startsWith("/admin");
 
   useEffect(() => {
     const syncRoute = () => setRoute(window.location.pathname);
@@ -92,19 +96,27 @@ function App() {
   }, []);
 
   useEffect(() => {
+    if (!studentProfile || isAdminRoute) {
+      return;
+    }
+
+    apiRequest("/api/students/session", {
+      method: "POST",
+      body: JSON.stringify(studentProfile),
+    })
+      .then((data) => setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) }))))
+      .catch(() => resetStudentProfile());
+  }, [isAdminRoute, studentProfile]);
+
+  useEffect(() => {
+    if (!adminAuthed || !isAdminRoute) {
+      return;
+    }
+
     apiRequest("/api/threads")
-      .then((data) =>
-        setThreads(
-          data.threads.map((thread) => ({
-            ...thread,
-            status: normalizeStatus(thread.status),
-          })),
-        ),
-      )
-      .catch(() => {
-        setThreads(loadThreads());
-      });
-  }, []);
+      .then((data) => setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) }))))
+      .catch(() => setThreads(loadThreads()));
+  }, [adminAuthed, isAdminRoute]);
 
   useEffect(() => {
     localStorage.setItem(STORAGE_KEY, JSON.stringify(threads));
@@ -116,7 +128,7 @@ function App() {
 
   useEffect(() => {
     if (studentProfile) {
-      localStorage.setItem("council-talk-student", JSON.stringify(studentProfile));
+      sessionStorage.setItem("council-talk-student", JSON.stringify(studentProfile));
     }
   }, [studentProfile]);
 
@@ -161,8 +173,6 @@ function App() {
     },
     { all: 0, 미완료: 0, 진행중: 0, 완료: 0 },
   );
-  const isAdminRoute = route.startsWith("/admin");
-
   const goTo = (path) => {
     window.history.pushState({}, "", path);
     setRoute(path);
@@ -180,42 +190,53 @@ function App() {
     event.preventDefault();
     const studentId = identityForm.studentId.trim();
     const name = identityForm.name.trim();
+    const pin = identityForm.pin.trim();
 
-    if (!/^\d{4}$/.test(studentId) || !name) {
+    if (!/^\d{4}$/.test(studentId) || !name || !/^\d{4}$/.test(pin)) {
       return;
     }
 
-    const profile = { studentId, name };
-    setStudentProfile(profile);
-    setForm((current) => ({ ...current, ...profile }));
-    setSupportView("rooms");
+    const profile = { studentId, name, pin };
+    apiRequest("/api/students/session", {
+      method: "POST",
+      body: JSON.stringify(profile),
+    })
+      .then((data) => {
+        setStudentProfile(profile);
+        setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+        setForm((current) => ({ ...current, studentId, name }));
+        setSupportView("rooms");
+      })
+      .catch(() => setIdentityForm((current) => ({ ...current, pin: "" })));
   };
 
   const resetStudentProfile = () => {
-    localStorage.removeItem("council-talk-student");
+    sessionStorage.removeItem("council-talk-student");
     setStudentProfile(null);
     setCurrentThreadId(null);
-    setIdentityForm({ studentId: "", name: "" });
+    setIdentityForm(emptyIdentity);
     setSupportView("identify");
   };
 
   const handleCreateThread = async (event) => {
     event.preventDefault();
-    if (
-      !/^\d{4}$/.test(form.studentId.trim()) ||
-      !form.name.trim() ||
-      !form.title.trim() ||
-      !form.content.trim()
-    ) {
-      return;
-    }
-
     const payload = {
       studentId: studentProfile?.studentId || form.studentId.trim(),
       name: studentProfile?.name || form.name.trim(),
+      pin: studentProfile?.pin,
       title: form.title.trim(),
       content: form.content.trim(),
     };
+
+    if (
+      !/^\d{4}$/.test(payload.studentId) ||
+      !payload.name ||
+      !/^\d{4}$/.test(payload.pin || "") ||
+      !payload.title ||
+      !payload.content
+    ) {
+      return;
+    }
 
     let thread;
     try {
@@ -224,7 +245,7 @@ function App() {
         body: JSON.stringify(payload),
       });
       thread = data.thread;
-      setThreads(data.threads);
+      setThreads(data.threads.map((item) => ({ ...item, status: normalizeStatus(item.status) })));
     } catch {
       thread = {
         id: crypto.randomUUID(),
@@ -245,7 +266,7 @@ function App() {
       saveThreadsFallback((current) => [thread, ...current]);
     }
 
-    setStudentProfile({ studentId: payload.studentId, name: payload.name });
+    setStudentProfile({ studentId: payload.studentId, name: payload.name, pin: payload.pin });
     setCurrentThreadId(thread.id);
     setSelectedThreadId(thread.id);
     setSupportView("chat");
@@ -261,9 +282,15 @@ function App() {
     try {
       const data = await apiRequest(`/api/threads/${currentThread.id}/messages`, {
         method: "POST",
-        body: JSON.stringify({ author: "student", text }),
+        body: JSON.stringify({
+          author: "student",
+          studentId: studentProfile?.studentId,
+          name: studentProfile?.name,
+          pin: studentProfile?.pin,
+          text,
+        }),
       });
-      setThreads(data.threads);
+      setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
     } catch {
       saveThreadsFallback((current) =>
         current.map((thread) =>
@@ -301,7 +328,7 @@ function App() {
       setAdminAuthed(true);
       setAdminPassword("");
       const data = await apiRequest("/api/threads");
-                  setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+      setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
     } catch {
       setAdminPassword("");
     }
@@ -320,7 +347,7 @@ function App() {
         method: "POST",
         body: JSON.stringify({ author: "admin", authorLabel, text }),
       });
-      setThreads(data.threads);
+      setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
     } catch {
       saveThreadsFallback((current) =>
         current.map((thread) =>
@@ -397,7 +424,7 @@ function App() {
     <main className="public-page">
       <section className="logo-stage" aria-label="Council Talk">
         <div className="wordmark">
-          <span className="wordmark-symbol" aria-hidden="true" />
+          <span className="wordmark-symbol" aria-hidden="true">C</span>
           <h1>Council Talk</h1>
         </div>
       </section>
@@ -519,6 +546,24 @@ function SupportPanel({
               />
             </label>
           </div>
+
+          <label>
+            4자리 비밀번호
+            <input
+              inputMode="numeric"
+              maxLength={4}
+              pattern="[0-9]{4}"
+              type="password"
+              value={identityForm.pin}
+              onChange={(event) =>
+                setIdentityForm((current) => ({
+                  ...current,
+                  pin: event.target.value.replace(/\D/g, "").slice(0, 4),
+                }))
+              }
+              placeholder="1234"
+            />
+          </label>
 
           <button className="black-button" type="submit">
             문의방 보기
@@ -695,7 +740,7 @@ function AdminScreen({
       <aside className="inbox">
         <header>
           <div className="admin-wordmark">
-            <span className="wordmark-symbol" aria-hidden="true" />
+            <span className="wordmark-symbol" aria-hidden="true">C</span>
             <h1>Council Talk</h1>
           </div>
           <span>{threads.length} inquiries</span>

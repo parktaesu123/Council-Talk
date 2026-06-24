@@ -1,4 +1,5 @@
 import express from "express";
+import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
@@ -9,6 +10,7 @@ const port = Number(process.env.PORT || 3000);
 const adminPassword = process.env.ADMIN_PASSWORD || "counciltalk";
 const dataDir = process.env.DATA_DIR || path.join(__dirname, "data");
 const dataFile = path.join(dataDir, "threads.json");
+const studentsFile = path.join(dataDir, "students.json");
 const staticDir = path.join(__dirname, "dist");
 let operationQueue = Promise.resolve();
 
@@ -35,6 +37,28 @@ const writeThreads = async (threads) => {
   await writeFile(dataFile, JSON.stringify(threads, null, 2));
 };
 
+const readStudents = async () => {
+  try {
+    const raw = await readFile(studentsFile, "utf8");
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
+};
+
+const writeStudents = async (students) => {
+  await mkdir(dataDir, { recursive: true });
+  await writeFile(studentsFile, JSON.stringify(students, null, 2));
+};
+
+const normalizeStudent = ({ studentId, name }) => ({
+  studentId: String(studentId || "").trim(),
+  name: String(name || "").trim(),
+});
+
+const studentKey = ({ studentId, name }) => `${studentId}:${name}`;
+const hashPin = (pin) => createHash("sha256").update(String(pin)).digest("hex");
+
 const normalizeStatus = (status) => {
   if (status === "답변완료") return "완료";
   if (status === "답변중") return "진행중";
@@ -54,6 +78,34 @@ const enqueueThreadUpdate = async (operation) => {
   return result;
 };
 
+const ensureStudentSession = async ({ studentId, name, pin }) => {
+  const profile = normalizeStudent({ studentId, name });
+  const cleanPin = String(pin || "").trim();
+
+  if (!/^\d{4}$/.test(profile.studentId) || !profile.name || !/^\d{4}$/.test(cleanPin)) {
+    return null;
+  }
+
+  const students = await readStudents();
+  const key = studentKey(profile);
+  const saved = students[key];
+
+  if (saved && saved.pinHash !== hashPin(cleanPin)) {
+    return null;
+  }
+
+  if (!saved) {
+    students[key] = {
+      ...profile,
+      pinHash: hashPin(cleanPin),
+      createdAt: new Date().toISOString(),
+    };
+    await writeStudents(students);
+  }
+
+  return profile;
+};
+
 app.get("/healthz", (_request, response) => {
   response.type("text/plain").send("ok\n");
 });
@@ -68,10 +120,29 @@ app.get("/api/threads", async (_request, response) => {
   });
 });
 
+app.post("/api/students/session", async (request, response) => {
+  const profile = await ensureStudentSession(request.body || {});
+
+  if (!profile) {
+    response.status(401).json({ message: "Invalid student credentials" });
+    return;
+  }
+
+  const threads = (await readThreads())
+    .filter((thread) => thread.studentId === profile.studentId && thread.name === profile.name)
+    .map((thread) => ({
+      ...thread,
+      status: normalizeStatus(thread.status),
+    }));
+
+  response.json({ profile, threads });
+});
+
 app.post("/api/threads", async (request, response) => {
   const { studentId, name, title, content } = request.body || {};
+  const profile = await ensureStudentSession(request.body || {});
 
-  if (!studentId || !name || !title || !content) {
+  if (!profile || !title || !content) {
     response.status(400).json({ message: "Missing required inquiry fields" });
     return;
   }
@@ -79,8 +150,8 @@ app.post("/api/threads", async (request, response) => {
   const now = new Date().toISOString();
   const thread = {
     id: crypto.randomUUID(),
-    studentId: String(studentId).trim(),
-    name: String(name).trim(),
+    studentId: profile.studentId,
+    name: profile.name,
     title: String(title).trim(),
     status: "미완료",
     createdAt: now,
@@ -89,7 +160,7 @@ app.post("/api/threads", async (request, response) => {
       {
         id: crypto.randomUUID(),
         author: "student",
-        authorLabel: String(name).trim(),
+        authorLabel: profile.name,
         time: timeLabel(),
         text: String(content).trim(),
       },
@@ -98,7 +169,9 @@ app.post("/api/threads", async (request, response) => {
 
   const threads = await enqueueThreadUpdate(async (currentThreads) => {
     currentThreads.unshift(thread);
-    return currentThreads;
+    return currentThreads.filter(
+      (item) => item.studentId === profile.studentId && item.name === profile.name,
+    );
   });
   response.status(201).json({ thread, threads });
 });
@@ -111,11 +184,21 @@ app.post("/api/threads/:id/messages", async (request, response) => {
     return;
   }
 
+  const profile =
+    author === "student" ? await ensureStudentSession(request.body || {}) : null;
+
   const result = await enqueueThreadUpdate(async (threads) => {
     const thread = threads.find((item) => item.id === request.params.id);
 
     if (!thread) {
       return null;
+    }
+
+    if (
+      author === "student" &&
+      (!profile || thread.studentId !== profile.studentId || thread.name !== profile.name)
+    ) {
+      return "unauthorized";
     }
 
     thread.status = author === "admin" ? "진행중" : "미완료";
@@ -128,8 +211,21 @@ app.post("/api/threads/:id/messages", async (request, response) => {
       text: String(text).trim(),
     });
 
-    return { thread, threads };
+    return {
+      thread,
+      threads:
+        author === "student"
+          ? threads.filter(
+              (item) => item.studentId === profile.studentId && item.name === profile.name,
+            )
+          : threads,
+    };
   });
+
+  if (result === "unauthorized") {
+    response.status(401).json({ message: "Invalid student credentials" });
+    return;
+  }
 
   if (!result) {
     response.status(404).json({ message: "Thread not found" });
