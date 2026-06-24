@@ -397,7 +397,7 @@ function App() {
     <main className="public-page">
       <section className="logo-stage" aria-label="Council Talk">
         <div className="wordmark">
-          <span className="wordmark-symbol">C</span>
+          <span className="wordmark-symbol" aria-hidden="true" />
           <h1>Council Talk</h1>
         </div>
       </section>
@@ -694,7 +694,10 @@ function AdminScreen({
     <main className="admin-page">
       <aside className="inbox">
         <header>
-          <h1>Council Talk</h1>
+          <div className="admin-wordmark">
+            <span className="wordmark-symbol" aria-hidden="true" />
+            <h1>Council Talk</h1>
+          </div>
           <span>{threads.length} inquiries</span>
         </header>
 
