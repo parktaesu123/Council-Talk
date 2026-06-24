@@ -592,20 +592,6 @@ textarea:focus {
   line-height: 1.55;
 }
 
-.message-emoji {
-  display: inline-grid;
-  width: fit-content;
-  margin-top: 8px;
-  padding: 3px 7px;
-  border-radius: 999px;
-  background: rgba(0, 0, 0, 0.06);
-  font-size: 15px;
-}
-
-.bubble.admin .message-emoji {
-  background: rgba(255, 255, 255, 0.14);
-}
-
 .message-actions {
   display: flex;
   flex-wrap: wrap;
@@ -630,18 +616,6 @@ textarea:focus {
   border-color: rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.76);
-}
-
-.message-actions button.active {
-  border-color: var(--black);
-  background: var(--black);
-  color: #ffffff;
-}
-
-.bubble.admin .message-actions button.active {
-  border-color: #ffffff;
-  background: #ffffff;
-  color: var(--black);
 }
 
 .message-edit-box {

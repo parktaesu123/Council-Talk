@@ -19,8 +19,6 @@ const FILTERS = [
   { label: "진행중", value: "진행중" },
   { label: "완료", value: "완료" },
 ];
-const EMOJIS = ["👍", "❤️", "😂", "😮", "🙏"];
-
 const emptyForm = {
   studentId: "",
   name: "",
@@ -526,31 +524,6 @@ function App() {
     }
   };
 
-  const handleMessageEmoji = async (thread, message, author, emoji) => {
-    try {
-      const data = await apiRequest(`/api/threads/${thread.id}/messages/${message.id}/emoji`, {
-        method: "PATCH",
-        body: JSON.stringify(getMessagePayload(author, { emoji })),
-      });
-      setThreads(data.threads.map((item) => ({ ...item, status: normalizeStatus(item.status) })));
-    } catch {
-      saveThreadsFallback((current) =>
-        current.map((item) =>
-          item.id === thread.id
-            ? {
-                ...item,
-                messages: item.messages.map((target) =>
-                  target.id === message.id
-                    ? { ...target, emoji: target.emoji === emoji ? "" : emoji }
-                    : target,
-                ),
-              }
-            : item,
-        ),
-      );
-    }
-  };
-
   const handleCreateTag = async (event) => {
     event.preventDefault();
     const name = tagName.trim();
@@ -624,7 +597,6 @@ function App() {
         handleMessageDelete={handleMessageDelete}
         handleMessageEditCancel={handleMessageEditCancel}
         handleMessageEditStart={handleMessageEditStart}
-        handleMessageEmoji={handleMessageEmoji}
         handleMessageUpdate={handleMessageUpdate}
         editingMessageId={editingMessageId}
         editingText={editingText}
@@ -685,7 +657,6 @@ function App() {
           handleMessageDelete={handleMessageDelete}
           handleMessageEditCancel={handleMessageEditCancel}
           handleMessageEditStart={handleMessageEditStart}
-          handleMessageEmoji={handleMessageEmoji}
           handleMessageUpdate={handleMessageUpdate}
           handleStudentSend={handleStudentSend}
           resetStudentProfile={resetStudentProfile}
@@ -829,7 +800,6 @@ function SupportPanel({
   handleMessageDelete,
   handleMessageEditCancel,
   handleMessageEditStart,
-  handleMessageEmoji,
   handleMessageUpdate,
   handleStudentSend,
   resetStudentProfile,
@@ -1005,7 +975,6 @@ function SupportPanel({
                 onCancelEdit={handleMessageEditCancel}
                 onChangeEdit={setEditingText}
                 onDelete={() => handleMessageDelete(currentThread, message, "student")}
-                onEmoji={(emoji) => handleMessageEmoji(currentThread, message, "student", emoji)}
                 onSaveEdit={() => handleMessageUpdate(currentThread, message, "student")}
                 onStartEdit={() => handleMessageEditStart(message)}
               />
@@ -1110,7 +1079,6 @@ function MessageBubble({
   onCancelEdit,
   onChangeEdit,
   onDelete,
-  onEmoji,
   onSaveEdit,
   onStartEdit,
 }) {
@@ -1158,19 +1126,7 @@ function MessageBubble({
         <p>{message.text}</p>
       )}
 
-      {message.emoji && <span className="message-emoji">{message.emoji}</span>}
-
       <div className="message-actions">
-        {EMOJIS.map((emoji) => (
-          <button
-            className={message.emoji === emoji ? "active" : ""}
-            key={emoji}
-            onClick={() => onEmoji(emoji)}
-            type="button"
-          >
-            {emoji}
-          </button>
-        ))}
         {isOwnMessage && !isEditing && (
           <>
             <button onClick={onStartEdit} type="button">
@@ -1203,7 +1159,6 @@ function AdminScreen({
   handleMessageDelete,
   handleMessageEditCancel,
   handleMessageEditStart,
-  handleMessageEmoji,
   handleMessageUpdate,
   editingMessageId,
   editingText,
@@ -1401,7 +1356,6 @@ function AdminScreen({
                   onCancelEdit={handleMessageEditCancel}
                   onChangeEdit={setEditingText}
                   onDelete={() => handleMessageDelete(selectedThread, message, "admin")}
-                  onEmoji={(emoji) => handleMessageEmoji(selectedThread, message, "admin", emoji)}
                   onSaveEdit={() => handleMessageUpdate(selectedThread, message, "admin")}
                   onStartEdit={() => handleMessageEditStart(message)}
                 />

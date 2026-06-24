@@ -463,48 +463,6 @@ app.delete("/api/threads/:id/messages/:messageId", async (request, response) => 
   response.json(result);
 });
 
-app.patch("/api/threads/:id/messages/:messageId/emoji", async (request, response) => {
-  const { author, emoji } = request.body || {};
-  const cleanEmoji = String(emoji || "").trim().slice(0, 8);
-
-  if (!cleanEmoji || !["student", "admin"].includes(author)) {
-    response.status(400).json({ message: "Invalid emoji" });
-    return;
-  }
-
-  const profile = author === "student" ? await ensureStudentSession(request.body || {}) : null;
-
-  const result = await enqueueThreadUpdate(async (threads) => {
-    const thread = threads.find((item) => item.id === request.params.id);
-
-    if (!thread) return null;
-    if (author === "student" && !canUseThreadAsStudent(thread, profile)) return "unauthorized";
-
-    const message = thread.messages.find((item) => item.id === request.params.messageId);
-    if (!message) return null;
-
-    message.emoji = message.emoji === cleanEmoji ? "" : cleanEmoji;
-    thread.updatedAt = new Date().toISOString();
-
-    return {
-      thread,
-      threads: author === "student" ? getVisibleThreads(threads, profile) : threads,
-    };
-  });
-
-  if (result === "unauthorized") {
-    response.status(401).json({ message: "Unauthorized emoji update" });
-    return;
-  }
-
-  if (!result) {
-    response.status(404).json({ message: "Message not found" });
-    return;
-  }
-
-  response.json(result);
-});
-
 app.patch("/api/threads/:id/status", async (request, response) => {
   const status = normalizeStatus(request.body?.status);
   const result = await enqueueThreadUpdate(async (threads) => {
