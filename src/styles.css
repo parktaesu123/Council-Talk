@@ -180,6 +180,79 @@ textarea:focus {
   padding: 6px 24px 24px;
 }
 
+.rooms-view {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  padding: 6px 20px 20px;
+}
+
+.rooms-title {
+  margin: 0 0 18px;
+}
+
+.student-room-list {
+  display: flex;
+  flex: 1;
+  min-height: 0;
+  flex-direction: column;
+  overflow: auto;
+  border-top: 1px solid var(--line-soft);
+}
+
+.student-room {
+  display: grid;
+  grid-template-columns: 1fr auto;
+  gap: 5px 12px;
+  width: 100%;
+  padding: 16px 4px;
+  border: 0;
+  border-bottom: 1px solid var(--line-soft);
+  background: transparent;
+  color: var(--ink);
+  text-align: left;
+}
+
+.student-room strong,
+.student-room span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.student-room span {
+  color: var(--muted);
+  font-size: 14px;
+}
+
+.student-room small {
+  grid-column: 2;
+  grid-row: 1 / span 2;
+  align-self: center;
+  color: var(--soft);
+}
+
+.empty-room-copy {
+  margin: 26px 0;
+  color: var(--muted);
+  text-align: center;
+}
+
+.new-room-button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  height: 48px;
+  margin-top: 16px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--black);
+  color: #ffffff;
+  font-weight: 700;
+}
+
 .support-title {
   margin: auto 0 14px;
   text-align: center;
@@ -228,6 +301,16 @@ textarea:focus {
   gap: 4px;
   padding: 0 24px 16px;
   border-bottom: 1px solid var(--line-soft);
+}
+
+.back-to-rooms {
+  justify-self: start;
+  width: fit-content;
+  border: 0;
+  background: transparent;
+  color: var(--muted);
+  font-size: 13px;
+  padding: 0 0 4px;
 }
 
 .conversation-title strong {

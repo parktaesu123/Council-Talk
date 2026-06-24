@@ -1,4 +1,4 @@
-import { ArrowUp, LockKeyhole, MessageCircle, RotateCcw, Send, UserRound, X } from "lucide-react";
+import { ArrowUp, LockKeyhole, MessageCircle, Plus, RotateCcw, Send, UserRound, X } from "lucide-react";
 import { useEffect, useState } from "react";
 
 const STORAGE_KEY = "council-talk-threads";
@@ -47,6 +47,14 @@ function App() {
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [currentThreadId, setCurrentThreadId] = useState(null);
+  const [studentProfile, setStudentProfile] = useState(() => {
+    try {
+      return JSON.parse(localStorage.getItem("council-talk-student") || "null") || null;
+    } catch {
+      return null;
+    }
+  });
+  const [supportView, setSupportView] = useState("rooms");
   const [studentMessage, setStudentMessage] = useState("");
   const [adminPassword, setAdminPassword] = useState("");
   const [adminAuthed, setAdminAuthed] = useState(
@@ -81,6 +89,12 @@ function App() {
   }, [adminName]);
 
   useEffect(() => {
+    if (studentProfile) {
+      localStorage.setItem("council-talk-student", JSON.stringify(studentProfile));
+    }
+  }, [studentProfile]);
+
+  useEffect(() => {
     if (!selectedThreadId && threads.length > 0) {
       setSelectedThreadId(threads[0].id);
     }
@@ -88,6 +102,12 @@ function App() {
 
   const currentThread = threads.find((thread) => thread.id === currentThreadId);
   const selectedThread = threads.find((thread) => thread.id === selectedThreadId);
+  const studentThreads = studentProfile
+    ? threads.filter(
+        (thread) =>
+          thread.studentId === studentProfile.studentId && thread.name === studentProfile.name,
+      )
+    : [];
   const isAdminRoute = route.startsWith("/admin");
 
   const goTo = (path) => {
@@ -149,8 +169,10 @@ function App() {
       saveThreadsFallback((current) => [thread, ...current]);
     }
 
+    setStudentProfile({ studentId: payload.studentId, name: payload.name });
     setCurrentThreadId(thread.id);
     setSelectedThreadId(thread.id);
+    setSupportView("chat");
     setForm(emptyForm);
   };
 
@@ -289,10 +311,15 @@ function App() {
           form={form}
           handleCreateThread={handleCreateThread}
           handleStudentSend={handleStudentSend}
+          setCurrentThreadId={setCurrentThreadId}
           setForm={setForm}
           setIsSupportOpen={setIsSupportOpen}
+          setSupportView={setSupportView}
           setStudentMessage={setStudentMessage}
+          studentProfile={studentProfile}
+          studentThreads={studentThreads}
           studentMessage={studentMessage}
+          supportView={supportView}
         />
       )}
     </main>
@@ -304,15 +331,37 @@ function SupportPanel({
   form,
   handleCreateThread,
   handleStudentSend,
+  setCurrentThreadId,
   setForm,
   setIsSupportOpen,
+  setSupportView,
   setStudentMessage,
+  studentProfile,
+  studentThreads,
   studentMessage,
+  supportView,
 }) {
+  const openNewInquiry = () => {
+    setCurrentThreadId(null);
+    setSupportView("new");
+    setForm((current) => ({
+      ...current,
+      studentId: studentProfile?.studentId || current.studentId,
+      name: studentProfile?.name || current.name,
+      title: "",
+      content: "",
+    }));
+  };
+
   return (
     <aside className="support-panel" aria-label="문의하기">
       <header className="support-header">
-        <button aria-label="처음으로" className="icon-button" type="button">
+        <button
+          aria-label="문의 목록"
+          className="icon-button"
+          onClick={() => setSupportView("rooms")}
+          type="button"
+        >
           <RotateCcw size={21} />
         </button>
         <button
@@ -325,7 +374,42 @@ function SupportPanel({
         </button>
       </header>
 
-      {!currentThread ? (
+      {supportView === "rooms" && (
+        <div className="rooms-view">
+          <div className="support-title rooms-title">
+            <h2>문의방</h2>
+            <p>문의마다 대화방이 따로 만들어집니다.</p>
+          </div>
+
+          <div className="student-room-list">
+            {studentThreads.length === 0 && (
+              <p className="empty-room-copy">아직 만든 문의방이 없습니다.</p>
+            )}
+            {studentThreads.map((thread) => (
+              <button
+                className="student-room"
+                key={thread.id}
+                onClick={() => {
+                  setCurrentThreadId(thread.id);
+                  setSupportView("chat");
+                }}
+                type="button"
+              >
+                <strong>{thread.title}</strong>
+                <span>{thread.messages.at(-1)?.text || "문의 내용 없음"}</span>
+                <small>{thread.status}</small>
+              </button>
+            ))}
+          </div>
+
+          <button className="new-room-button" onClick={openNewInquiry} type="button">
+            <Plus size={18} />
+            새 문의하기
+          </button>
+        </div>
+      )}
+
+      {supportView === "new" && (
         <form className="support-form" onSubmit={handleCreateThread}>
           <div className="support-title">
             <h2>문의하기</h2>
@@ -388,9 +472,14 @@ function SupportPanel({
             문의 등록
           </button>
         </form>
-      ) : (
+      )}
+
+      {supportView === "chat" && currentThread && (
         <>
           <div className="conversation-title">
+            <button className="back-to-rooms" onClick={() => setSupportView("rooms")} type="button">
+              문의방 목록
+            </button>
             <strong>{currentThread.title}</strong>
             <span>{currentThread.status}</span>
           </div>
