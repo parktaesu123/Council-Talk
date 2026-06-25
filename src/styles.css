@@ -1077,12 +1077,12 @@ textarea:focus {
 
 .admin-page {
   display: grid;
-  grid-template-columns: 250px 360px 1fr;
-  min-height: 100vh;
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-columns: 380px minmax(0, 1fr);
+  height: 100vh;
   background: #ffffff;
 }
 
-.admin-menu,
 .inbox {
   display: flex;
   flex-direction: column;
@@ -1090,11 +1090,17 @@ textarea:focus {
   border-right: 1px solid var(--line);
 }
 
-.admin-menu {
+.admin-topbar {
+  grid-column: 1 / -1;
+  display: grid;
+  grid-template-columns: minmax(210px, auto) minmax(0, 1fr) minmax(210px, auto);
+  gap: 18px;
+  align-items: center;
+  padding: 18px 22px;
+  border-bottom: 1px solid var(--line);
   background: #ffffff;
 }
 
-.admin-menu header,
 .inbox-context-head {
   display: flex;
   align-items: flex-start;
@@ -1117,13 +1123,13 @@ textarea:focus {
   font-size: 12px;
 }
 
-.admin-menu h1 {
+.admin-wordmark h1 {
   margin: 0;
-  font-size: 24px;
+  font-size: 22px;
   letter-spacing: 0;
 }
 
-.admin-menu header span,
+.admin-wordmark > span:not(.wordmark-symbol),
 .inbox-context-head span,
 .empty-copy,
 .conversation-head p {
@@ -1145,10 +1151,11 @@ textarea:focus {
 }
 
 .admin-nav {
-  display: grid;
-  grid-template-columns: 1fr;
+  display: flex;
+  justify-content: center;
+  min-width: 0;
   gap: 8px;
-  padding: 0 18px 18px;
+  overflow-x: auto;
 }
 
 .admin-nav button {
@@ -1157,9 +1164,10 @@ textarea:focus {
   align-items: center;
   justify-content: space-between;
   height: 40px;
-  padding: 0 12px;
+  min-width: fit-content;
+  padding: 0 14px;
   border: 1px solid var(--line);
-  border-radius: 7px;
+  border-radius: 999px;
   background: #ffffff;
   color: var(--ink);
   font-size: 13px;
@@ -1190,7 +1198,7 @@ textarea:focus {
   grid-template-columns: 22px 1fr;
   gap: 8px;
   align-items: center;
-  margin: 0 18px 18px;
+  margin: 0;
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 7px;
@@ -1860,17 +1868,22 @@ textarea:focus {
 @media (max-width: 780px) {
   .admin-page {
     grid-template-columns: 1fr;
+    height: auto;
+    min-height: 100vh;
   }
 
-  .admin-menu,
   .inbox {
     min-height: 320px;
     border-right: 0;
     border-bottom: 1px solid var(--line);
   }
 
+  .admin-topbar {
+    grid-template-columns: 1fr;
+  }
+
   .admin-nav {
-    grid-template-columns: 1fr 1fr;
+    justify-content: flex-start;
   }
 
   .wordmark {
@@ -1932,14 +1945,9 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
-  .admin-menu {
-    border-right: 0;
-    border-bottom: 1px solid var(--line);
-  }
-
-  .admin-nav {
-    grid-template-columns: repeat(5, minmax(120px, 1fr));
-    overflow-x: auto;
+  .admin-topbar {
+    grid-template-columns: 1fr;
+    align-items: start;
   }
 
   .conversation-head {
@@ -2050,7 +2058,6 @@ textarea:focus {
   }
 
   .admin-nav {
-    grid-template-columns: 1fr 1fr;
     padding-left: 18px;
     padding-right: 18px;
   }

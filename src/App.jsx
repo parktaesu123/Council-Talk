@@ -1926,15 +1926,12 @@ function AdminScreen({
 
   return (
     <main className="admin-page">
-      <aside className="admin-menu">
-        <header>
-          <div className="admin-wordmark">
-            <span className="wordmark-symbol" aria-hidden="true">C</span>
-            <h1>Council Talk</h1>
-          </div>
+      <header className="admin-topbar">
+        <div className="admin-wordmark">
+          <span className="wordmark-symbol" aria-hidden="true">C</span>
+          <h1>Council Talk</h1>
           <span>{statusCounts.all} inquiries</span>
-        </header>
-
+        </div>
         <nav className="admin-nav" aria-label="어드민 메뉴">
           <button
             className={adminSection === "inquiries" ? "active" : ""}
@@ -1973,7 +1970,6 @@ function AdminScreen({
             알림 설정
           </button>
         </nav>
-
         <label className="admin-name">
           <UserRound size={17} />
           <input
@@ -1982,7 +1978,7 @@ function AdminScreen({
             placeholder="답변자 이름"
           />
         </label>
-      </aside>
+      </header>
 
       <aside className="inbox">
         <header className="inbox-context-head">
