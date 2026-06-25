@@ -486,6 +486,43 @@ app.patch("/api/threads/:id/status", async (request, response) => {
   response.json({ thread, threads });
 });
 
+app.post("/api/threads/:id/reopen", async (request, response) => {
+  const profile = await ensureStudentSession(request.body || {});
+
+  if (!profile) {
+    response.status(401).json({ message: "Invalid student credentials" });
+    return;
+  }
+
+  const result = await enqueueThreadUpdate(async (threads) => {
+    const thread = threads.find((item) => item.id === request.params.id);
+
+    if (!thread) {
+      return null;
+    }
+
+    if (!canUseThreadAsStudent(thread, profile)) {
+      return "unauthorized";
+    }
+
+    thread.status = "진행중";
+    thread.updatedAt = new Date().toISOString();
+    return { thread, threads: getVisibleThreads(threads, profile) };
+  });
+
+  if (result === "unauthorized") {
+    response.status(401).json({ message: "Invalid student credentials" });
+    return;
+  }
+
+  if (!result) {
+    response.status(404).json({ message: "Thread not found" });
+    return;
+  }
+
+  response.json(result);
+});
+
 app.post("/api/admin/login", (request, response) => {
   if (request.body?.password !== adminPassword) {
     response.status(401).json({ message: "Invalid password" });

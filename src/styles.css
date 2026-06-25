@@ -247,12 +247,53 @@ textarea:focus {
 
 .auth-mode-button {
   width: fit-content;
-  justify-self: center;
   border: 0;
   background: transparent;
+  color: var(--black);
+  font-size: 13px;
+  font-weight: 900;
+  text-decoration: underline;
+  text-underline-offset: 4px;
+}
+
+.auth-switch-copy {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  gap: 8px;
+  padding-top: 2px;
   color: var(--muted);
   font-size: 13px;
-  font-weight: 700;
+}
+
+.confirm-dialog {
+  display: grid;
+  width: min(390px, 100%);
+  gap: 14px;
+  padding: 24px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: #ffffff;
+  box-shadow: var(--shadow);
+  animation: modal-in 220ms cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+
+.confirm-dialog h2 {
+  margin: 0;
+  font-size: 24px;
+}
+
+.confirm-dialog p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.confirm-dialog > div {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
 .support-panel {
@@ -546,6 +587,18 @@ textarea:focus {
   line-height: 1.45;
 }
 
+.completed-chat-notice button {
+  width: fit-content;
+  margin-top: 5px;
+  padding: 8px 11px;
+  border: 0;
+  border-radius: 7px;
+  background: var(--black);
+  color: #ffffff;
+  font-size: 13px;
+  font-weight: 800;
+}
+
 .messages {
   display: flex;
   flex: 1;
@@ -557,6 +610,7 @@ textarea:focus {
 }
 
 .bubble {
+  position: relative;
   max-width: 84%;
   padding: 13px 15px;
   border: 1px solid var(--line-soft);
@@ -593,13 +647,9 @@ textarea:focus {
 }
 
 .message-actions {
-  display: flex;
-  flex-wrap: wrap;
-  gap: 5px;
-  margin-top: 9px;
+  display: none;
 }
 
-.message-actions button,
 .message-edit-box button {
   height: 26px;
   padding: 0 8px;
@@ -611,11 +661,71 @@ textarea:focus {
   font-weight: 800;
 }
 
-.bubble.admin .message-actions button,
 .bubble.admin .message-edit-box button {
   border-color: rgba(255, 255, 255, 0.2);
   background: rgba(255, 255, 255, 0.08);
   color: rgba(255, 255, 255, 0.76);
+}
+
+.message-menu-wrap {
+  position: absolute;
+  top: 8px;
+  right: 8px;
+  z-index: 2;
+}
+
+.message-menu-trigger {
+  display: grid;
+  min-width: 34px;
+  height: 26px;
+  place-items: center;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: #ffffff;
+  color: var(--muted);
+  opacity: 0;
+  transform: translateY(-2px);
+  transition: opacity 140ms ease, transform 140ms ease;
+}
+
+.bubble:hover .message-menu-trigger,
+.message-menu-wrap:focus-within .message-menu-trigger {
+  opacity: 1;
+  transform: translateY(0);
+}
+
+.bubble.admin .message-menu-trigger {
+  border-color: rgba(255, 255, 255, 0.24);
+  background: rgba(255, 255, 255, 0.96);
+  color: var(--black);
+}
+
+.message-menu {
+  position: absolute;
+  top: 31px;
+  right: 0;
+  display: grid;
+  min-width: 86px;
+  padding: 5px;
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  background: #ffffff;
+  box-shadow: 0 10px 26px rgba(0, 0, 0, 0.12);
+}
+
+.message-menu button {
+  height: 32px;
+  border: 0;
+  border-radius: 6px;
+  background: transparent;
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 800;
+  text-align: left;
+}
+
+.message-menu button:hover {
+  background: var(--surface-soft);
 }
 
 .message-edit-box {
@@ -1263,6 +1373,11 @@ textarea:focus {
     padding: 20px;
   }
 
+  .confirm-dialog {
+    width: min(390px, calc(100vw - 28px));
+    padding: 20px;
+  }
+
   .support-panel {
     right: 0;
     bottom: 0;
@@ -1368,6 +1483,15 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
+  .auth-switch-copy {
+    flex-direction: column;
+    gap: 5px;
+  }
+
+  .confirm-dialog > div {
+    grid-template-columns: 1fr;
+  }
+
   .student-auth-modal h2 {
     font-size: 22px;
   }
@@ -1383,5 +1507,12 @@ textarea:focus {
   .round-send {
     width: 38px;
     height: 38px;
+  }
+}
+
+@media (hover: none) {
+  .message-menu-trigger {
+    opacity: 1;
+    transform: translateY(0);
   }
 }

@@ -3,6 +3,7 @@ import {
   ArrowUp,
   LockKeyhole,
   MessageCircle,
+  Pencil,
   Plus,
   Send,
   Trash2,
@@ -104,6 +105,8 @@ function App() {
   const [adminReply, setAdminReply] = useState("");
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingText, setEditingText] = useState("");
+  const [activeMessageMenuId, setActiveMessageMenuId] = useState(null);
+  const [confirmDialog, setConfirmDialog] = useState(null);
   const [adminFilter, setAdminFilter] = useState("all");
   const [adminTagFilter, setAdminTagFilter] = useState("all");
   const [adminSection, setAdminSection] = useState("inquiries");
@@ -556,6 +559,50 @@ function App() {
     }
   };
 
+  const openConfirmDialog = ({ title, message, confirmLabel = "예", onConfirm }) => {
+    setConfirmDialog({ title, message, confirmLabel, onConfirm });
+  };
+
+  const closeConfirmDialog = () => setConfirmDialog(null);
+
+  const confirmTagDelete = (tag) => {
+    openConfirmDialog({
+      title: "태그 삭제",
+      message: `"${tag.name}"을 삭제하시겠습니까? 삭제해도 기존 문의의 태그명은 기록으로 남습니다.`,
+      confirmLabel: "삭제",
+      onConfirm: () => handleDeleteTag(tag.id),
+    });
+  };
+
+  const handleReopenThread = async (thread) => {
+    try {
+      const data = await apiRequest(`/api/threads/${thread.id}/reopen`, {
+        method: "POST",
+        body: JSON.stringify({
+          studentId: studentProfile?.studentId,
+          name: studentProfile?.name,
+          pin: studentProfile?.pin,
+        }),
+      });
+      setThreads(data.threads.map((item) => ({ ...item, status: normalizeStatus(item.status) })));
+    } catch {
+      saveThreadsFallback((current) =>
+        current.map((item) =>
+          item.id === thread.id ? { ...item, status: "진행중", updatedAt: new Date().toISOString() } : item,
+        ),
+      );
+    }
+  };
+
+  const confirmReopenThread = (thread) => {
+    openConfirmDialog({
+      title: "대화를 다시 이어갈까요?",
+      message: "완료된 문의를 다시 진행중으로 바꾸고 대화를 이어갈 수 있습니다.",
+      confirmLabel: "예, 이어갈게요",
+      onConfirm: () => handleReopenThread(thread),
+    });
+  };
+
   const handleAdminStatusChange = async (status) => {
     if (!selectedThread) {
       return;
@@ -580,43 +627,60 @@ function App() {
 
   if (isAdminRoute) {
     return (
-      <AdminScreen
-        adminAuthed={adminAuthed}
-        adminError={adminError}
-        adminFilter={adminFilter}
-        adminName={adminName}
-        adminPassword={adminPassword}
-        adminReply={adminReply}
-        adminSection={adminSection}
-        adminTagFilter={adminTagFilter}
-        handleCreateTag={handleCreateTag}
-        handleAdminLogin={handleAdminLogin}
-        handleAdminReply={handleAdminReply}
-        handleAdminStatusChange={handleAdminStatusChange}
-        handleDeleteTag={handleDeleteTag}
-        handleMessageDelete={handleMessageDelete}
-        handleMessageEditCancel={handleMessageEditCancel}
-        handleMessageEditStart={handleMessageEditStart}
-        handleMessageUpdate={handleMessageUpdate}
-        editingMessageId={editingMessageId}
-        editingText={editingText}
-        selectedThread={selectedThread}
-        selectedThreadId={selectedThreadId}
-        setAdminFilter={setAdminFilter}
-        setAdminName={setAdminName}
-        setAdminPassword={setAdminPassword}
-        setAdminReply={setAdminReply}
-        setAdminSection={setAdminSection}
-        setAdminTagFilter={setAdminTagFilter}
-        setEditingText={setEditingText}
-        setSelectedThreadId={setSelectedThreadId}
-        setTagName={setTagName}
-        statusCounts={statusCounts}
-        tagCounts={tagCounts}
-        tagName={tagName}
-        tags={tags}
-        threads={filteredAdminThreads}
-      />
+      <>
+        <AdminScreen
+          adminAuthed={adminAuthed}
+          adminError={adminError}
+          adminFilter={adminFilter}
+          adminName={adminName}
+          adminPassword={adminPassword}
+          adminReply={adminReply}
+          adminSection={adminSection}
+          adminTagFilter={adminTagFilter}
+          handleCreateTag={handleCreateTag}
+          handleAdminLogin={handleAdminLogin}
+          handleAdminReply={handleAdminReply}
+          handleAdminStatusChange={handleAdminStatusChange}
+          handleDeleteTag={handleDeleteTag}
+          handleMessageDelete={handleMessageDelete}
+          handleMessageEditCancel={handleMessageEditCancel}
+          handleMessageEditStart={handleMessageEditStart}
+          handleMessageUpdate={handleMessageUpdate}
+          editingMessageId={editingMessageId}
+          editingText={editingText}
+          activeMessageMenuId={activeMessageMenuId}
+          selectedThread={selectedThread}
+          selectedThreadId={selectedThreadId}
+          setAdminFilter={setAdminFilter}
+          setAdminName={setAdminName}
+          setAdminPassword={setAdminPassword}
+          setAdminReply={setAdminReply}
+          setAdminSection={setAdminSection}
+          setAdminTagFilter={setAdminTagFilter}
+          setActiveMessageMenuId={setActiveMessageMenuId}
+          setEditingText={setEditingText}
+          setSelectedThreadId={setSelectedThreadId}
+          setTagName={setTagName}
+          statusCounts={statusCounts}
+          tagCounts={tagCounts}
+          tagName={tagName}
+          tags={tags}
+          onRequestDeleteTag={confirmTagDelete}
+          threads={filteredAdminThreads}
+        />
+        {confirmDialog && (
+          <ConfirmDialog
+            confirmLabel={confirmDialog.confirmLabel}
+            message={confirmDialog.message}
+            onCancel={closeConfirmDialog}
+            onConfirm={() => {
+              confirmDialog.onConfirm();
+              closeConfirmDialog();
+            }}
+            title={confirmDialog.title}
+          />
+        )}
+      </>
     );
   }
 
@@ -658,8 +722,11 @@ function App() {
           handleMessageEditCancel={handleMessageEditCancel}
           handleMessageEditStart={handleMessageEditStart}
           handleMessageUpdate={handleMessageUpdate}
+          activeMessageMenuId={activeMessageMenuId}
+          onRequestReopenThread={confirmReopenThread}
           handleStudentSend={handleStudentSend}
           resetStudentProfile={resetStudentProfile}
+          setActiveMessageMenuId={setActiveMessageMenuId}
           setCurrentThreadId={setCurrentThreadId}
           setEditingText={setEditingText}
           setForm={setForm}
@@ -671,6 +738,19 @@ function App() {
           studentMessage={studentMessage}
           supportView={supportView}
           tags={tags}
+        />
+      )}
+
+      {confirmDialog && (
+        <ConfirmDialog
+          confirmLabel={confirmDialog.confirmLabel}
+          message={confirmDialog.message}
+          onCancel={closeConfirmDialog}
+          onConfirm={() => {
+            confirmDialog.onConfirm();
+            closeConfirmDialog();
+          }}
+          title={confirmDialog.title}
         />
       )}
     </main>
@@ -779,14 +859,36 @@ function StudentAuthModal({
           </button>
         </div>
 
-        <button
-          className="auth-mode-button"
-          onClick={() => switchMode(isSignup ? "login" : "signup")}
-          type="button"
-        >
-          {isSignup ? "이미 계정이 있어요" : "회원가입"}
-        </button>
+        <div className="auth-switch-copy">
+          <span>{isSignup ? "이미 계정이 있다면" : "처음 이용한다면"}</span>
+          <button
+            className="auth-mode-button"
+            onClick={() => switchMode(isSignup ? "login" : "signup")}
+            type="button"
+          >
+            {isSignup ? "로그인으로 돌아가기" : "회원가입하기"}
+          </button>
+        </div>
       </form>
+    </div>
+  );
+}
+
+function ConfirmDialog({ confirmLabel, message, onCancel, onConfirm, title }) {
+  return (
+    <div className="modal-backdrop confirm-backdrop" role="presentation">
+      <section className="confirm-dialog" role="dialog" aria-modal="true" aria-label={title}>
+        <h2>{title}</h2>
+        <p>{message}</p>
+        <div>
+          <button className="ghost-button" onClick={onCancel} type="button">
+            아니요
+          </button>
+          <button className="black-button" onClick={onConfirm} type="button">
+            {confirmLabel}
+          </button>
+        </div>
+      </section>
     </div>
   );
 }
@@ -795,6 +897,7 @@ function SupportPanel({
   currentThread,
   editingMessageId,
   editingText,
+  activeMessageMenuId,
   form,
   handleCreateThread,
   handleMessageDelete,
@@ -802,7 +905,9 @@ function SupportPanel({
   handleMessageEditStart,
   handleMessageUpdate,
   handleStudentSend,
+  onRequestReopenThread,
   resetStudentProfile,
+  setActiveMessageMenuId,
   setCurrentThreadId,
   setEditingText,
   setForm,
@@ -960,7 +1065,10 @@ function SupportPanel({
           {normalizeStatus(currentThread.status) === "완료" && (
             <div className="completed-chat-notice">
               <strong>완료된 채팅입니다.</strong>
-              <span>학생회에서 문의를 완료 처리하여 더 이상 메시지를 보낼 수 없습니다.</span>
+              <span>학생회에서 문의를 완료 처리했습니다. 이어서 대화하려면 다시 열어주세요.</span>
+              <button onClick={() => onRequestReopenThread(currentThread)} type="button">
+                대화 다시 하기
+              </button>
             </div>
           )}
 
@@ -972,10 +1080,12 @@ function SupportPanel({
                 editingText={editingText}
                 key={message.id}
                 message={message}
+                activeMessageMenuId={activeMessageMenuId}
                 onCancelEdit={handleMessageEditCancel}
                 onChangeEdit={setEditingText}
                 onDelete={() => handleMessageDelete(currentThread, message, "student")}
                 onSaveEdit={() => handleMessageUpdate(currentThread, message, "student")}
+                setActiveMessageMenuId={setActiveMessageMenuId}
                 onStartEdit={() => handleMessageEditStart(message)}
               />
             ))}
@@ -1016,6 +1126,7 @@ function SupportPanel({
 function TagAdminPanel({
   handleCreateTag,
   handleDeleteTag,
+  onRequestDeleteTag,
   setTagName,
   tagCounts,
   tagName,
@@ -1060,7 +1171,7 @@ function TagAdminPanel({
               <strong>{tagCounts[tag.id] || 0}건</strong>
             </div>
             <p>이 태그로 접수된 문의 수입니다. 삭제해도 기존 문의의 태그명은 기록으로 남습니다.</p>
-            <button onClick={() => handleDeleteTag(tag.id)} type="button">
+            <button onClick={() => onRequestDeleteTag(tag)} type="button">
               <Trash2 size={15} />
               삭제
             </button>
@@ -1073,6 +1184,7 @@ function TagAdminPanel({
 
 function MessageBubble({
   actor,
+  activeMessageMenuId,
   editingMessageId,
   editingText,
   message,
@@ -1081,12 +1193,48 @@ function MessageBubble({
   onDelete,
   onSaveEdit,
   onStartEdit,
+  setActiveMessageMenuId,
 }) {
   const isOwnMessage = message.author === actor;
   const isEditing = editingMessageId === message.id;
+  const isMenuOpen = activeMessageMenuId === message.id;
 
   return (
     <article className={`bubble ${message.author}`} key={message.id}>
+      {isOwnMessage && !isEditing && (
+        <div className="message-menu-wrap">
+          <button
+            aria-label="메시지 옵션"
+            className="message-menu-trigger"
+            onClick={() => setActiveMessageMenuId(isMenuOpen ? null : message.id)}
+            type="button"
+          >
+            <Pencil size={14} />
+          </button>
+          {isMenuOpen && (
+            <div className="message-menu">
+              <button
+                onClick={() => {
+                  setActiveMessageMenuId(null);
+                  onStartEdit();
+                }}
+                type="button"
+              >
+                수정
+              </button>
+              <button
+                onClick={() => {
+                  setActiveMessageMenuId(null);
+                  onDelete();
+                }}
+                type="button"
+              >
+                삭제
+              </button>
+            </div>
+          )}
+        </div>
+      )}
       <div className="message-meta">
         <strong>{message.authorLabel}</strong>
         <span>
@@ -1125,19 +1273,6 @@ function MessageBubble({
       ) : (
         <p>{message.text}</p>
       )}
-
-      <div className="message-actions">
-        {isOwnMessage && !isEditing && (
-          <>
-            <button onClick={onStartEdit} type="button">
-              수정
-            </button>
-            <button onClick={onDelete} type="button">
-              삭제
-            </button>
-          </>
-        )}
-      </div>
     </article>
   );
 }
@@ -1162,6 +1297,8 @@ function AdminScreen({
   handleMessageUpdate,
   editingMessageId,
   editingText,
+  activeMessageMenuId,
+  onRequestDeleteTag,
   selectedThread,
   selectedThreadId,
   setAdminFilter,
@@ -1170,6 +1307,7 @@ function AdminScreen({
   setAdminReply,
   setAdminSection,
   setAdminTagFilter,
+  setActiveMessageMenuId,
   setEditingText,
   setSelectedThreadId,
   setTagName,
@@ -1314,6 +1452,7 @@ function AdminScreen({
           <TagAdminPanel
             handleCreateTag={handleCreateTag}
             handleDeleteTag={handleDeleteTag}
+            onRequestDeleteTag={onRequestDeleteTag}
             setTagName={setTagName}
             tagCounts={tagCounts}
             tagName={tagName}
@@ -1349,6 +1488,7 @@ function AdminScreen({
               {selectedThread.messages.map((message) => (
                 <MessageBubble
                   actor="admin"
+                  activeMessageMenuId={activeMessageMenuId}
                   editingMessageId={editingMessageId}
                   editingText={editingText}
                   key={message.id}
@@ -1357,6 +1497,7 @@ function AdminScreen({
                   onChangeEdit={setEditingText}
                   onDelete={() => handleMessageDelete(selectedThread, message, "admin")}
                   onSaveEdit={() => handleMessageUpdate(selectedThread, message, "admin")}
+                  setActiveMessageMenuId={setActiveMessageMenuId}
                   onStartEdit={() => handleMessageEditStart(message)}
                 />
               ))}
