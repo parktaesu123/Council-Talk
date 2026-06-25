@@ -86,12 +86,62 @@ textarea:focus {
   position: relative;
   display: flex;
   flex-direction: column;
-  justify-content: center;
-  gap: 34px;
   min-height: 100vh;
-  padding-bottom: 16vh;
+  padding: 24px;
   align-items: center;
   background: #ffffff;
+}
+
+.public-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  width: min(1120px, 100%);
+  gap: 18px;
+}
+
+.public-brand {
+  display: inline-flex;
+  align-items: center;
+  gap: 12px;
+  border: 0;
+  background: transparent;
+  color: var(--ink);
+}
+
+.public-brand .wordmark-symbol {
+  width: 34px;
+  height: 34px;
+  border-radius: 7px;
+  font-size: 16px;
+}
+
+.public-brand strong {
+  font-size: 20px;
+}
+
+.public-header nav {
+  display: inline-flex;
+  flex-wrap: wrap;
+  justify-content: flex-end;
+  gap: 8px;
+}
+
+.public-header nav button {
+  height: 38px;
+  padding: 0 13px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: #ffffff;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.public-header nav button.active {
+  border-color: var(--black);
+  background: var(--black);
+  color: #ffffff;
 }
 
 .admin-link {
@@ -108,9 +158,11 @@ textarea:focus {
 
 .logo-stage {
   display: grid;
+  flex: 1;
+  gap: 34px;
   place-items: center;
   width: 100%;
-  min-height: auto;
+  padding-bottom: 12vh;
 }
 
 .wordmark {
@@ -153,6 +205,125 @@ textarea:focus {
   color: #ffffff;
   box-shadow: var(--shadow);
   font-weight: 800;
+}
+
+.profile-page {
+  display: grid;
+  width: min(1120px, 100%);
+  gap: 24px;
+  padding: 68px 0 34px;
+}
+
+.profile-hero {
+  display: grid;
+  gap: 8px;
+  padding-bottom: 24px;
+  border-bottom: 1px solid var(--line);
+}
+
+.profile-hero p,
+.profile-change-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 14px;
+  font-weight: 800;
+}
+
+.profile-hero h2 {
+  margin: 0;
+  font-size: clamp(38px, 7vw, 76px);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+}
+
+.profile-hero span {
+  color: var(--muted);
+  font-size: 16px;
+}
+
+.profile-layout {
+  display: grid;
+  grid-template-columns: minmax(280px, 0.8fr) minmax(320px, 1.2fr);
+  gap: 18px;
+}
+
+.profile-big-card,
+.profile-change-card {
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #ffffff;
+}
+
+.profile-big-card {
+  display: grid;
+  align-content: space-between;
+  min-height: 420px;
+  padding: 30px;
+  background: var(--black);
+  color: #ffffff;
+}
+
+.profile-big-card span,
+.profile-big-card p,
+.profile-big-card small {
+  color: rgba(255, 255, 255, 0.64);
+}
+
+.profile-big-card span {
+  font-size: 13px;
+  font-weight: 900;
+  text-transform: uppercase;
+}
+
+.profile-big-card strong {
+  margin-top: 28px;
+  font-size: clamp(42px, 7vw, 72px);
+  line-height: 0.95;
+  letter-spacing: -0.04em;
+}
+
+.profile-big-card p {
+  margin: 8px 0 0;
+  font-size: 24px;
+  font-weight: 800;
+}
+
+.profile-big-card div {
+  display: grid;
+  gap: 5px;
+  width: fit-content;
+  padding: 14px 16px;
+  border: 1px solid rgba(255, 255, 255, 0.18);
+  border-radius: 12px;
+}
+
+.profile-big-card b {
+  font-size: 24px;
+}
+
+.profile-change-card {
+  display: grid;
+  gap: 18px;
+  padding: 30px;
+}
+
+.profile-change-card h3 {
+  margin: 5px 0 0;
+  font-size: 30px;
+}
+
+.profile-change-card label {
+  display: grid;
+  gap: 8px;
+  color: #474747;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.profile-actions {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
 }
 
 .modal-backdrop {
@@ -1565,7 +1736,24 @@ textarea:focus {
 
   .public-page {
     gap: 28px;
-    padding-bottom: 12vh;
+    padding: 20px;
+  }
+
+  .public-header {
+    align-items: flex-start;
+    flex-direction: column;
+  }
+
+  .public-header nav {
+    justify-content: flex-start;
+  }
+
+  .profile-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .profile-big-card {
+    min-height: 300px;
   }
 
   .support-panel {
@@ -1609,7 +1797,11 @@ textarea:focus {
   .public-page {
     justify-content: flex-start;
     gap: 26px;
-    padding: 28vh 20px 0;
+    padding: 18px;
+  }
+
+  .logo-stage {
+    padding: 16vh 0 10vh;
   }
 
   .wordmark-symbol {
@@ -1624,6 +1816,20 @@ textarea:focus {
 
   .support-launcher {
     width: min(220px, 100%);
+  }
+
+  .profile-page {
+    padding-top: 36px;
+  }
+
+  .profile-change-card,
+  .profile-big-card {
+    padding: 22px;
+    border-radius: 12px;
+  }
+
+  .profile-actions {
+    grid-template-columns: 1fr;
   }
 
   .modal-backdrop {

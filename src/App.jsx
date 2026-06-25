@@ -91,6 +91,8 @@ function App() {
   const [profileChangeForm, setProfileChangeForm] = useState(emptyProfileChangeForm);
   const [profileChangeMessage, setProfileChangeMessage] = useState("");
   const [currentThreadId, setCurrentThreadId] = useState(null);
+  const [publicView, setPublicView] = useState("home");
+  const [authTarget, setAuthTarget] = useState("support");
   const [studentProfile, setStudentProfile] = useState(() => {
     try {
       return JSON.parse(sessionStorage.getItem("council-talk-student") || "null") || null;
@@ -290,6 +292,12 @@ function App() {
     setForm((current) => ({ ...current, studentId: nextProfile.studentId, name: nextProfile.name }));
     setIdentityError("");
     setSupportView("rooms");
+    if (authTarget === "profile") {
+      setIsSupportOpen(false);
+      setPublicView("profile");
+      return;
+    }
+
     setIsSupportOpen(true);
   };
 
@@ -326,7 +334,22 @@ function App() {
     setIdentityError("");
     setAuthMode("login");
     setSupportView("rooms");
+    setAuthTarget("support");
     setIsSupportOpen(true);
+  };
+
+  const openProfilePage = () => {
+    setIdentityError("");
+    setAuthMode("login");
+    setAuthTarget("profile");
+
+    if (!studentProfile) {
+      setIsSupportOpen(true);
+      return;
+    }
+
+    setIsSupportOpen(false);
+    setPublicView("profile");
   };
 
   const resetStudentProfile = () => {
@@ -336,6 +359,7 @@ function App() {
     setIdentityForm(emptyIdentity);
     setProfileChangeForm(emptyProfileChangeForm);
     setProfileChangeMessage("");
+    setPublicView("home");
     setIdentityError("");
     setAuthMode("login");
     setSupportView("rooms");
@@ -813,20 +837,50 @@ function App() {
 
   return (
     <main className="public-page">
-      <section className="logo-stage" aria-label="Council Talk">
-        <div className="wordmark">
+      <header className="public-header">
+        <button className="public-brand" onClick={() => setPublicView("home")} type="button">
           <span className="wordmark-symbol" aria-hidden="true">C</span>
-          <h1>Council Talk</h1>
-        </div>
-      </section>
+          <strong>Council Talk</strong>
+        </button>
+        <nav aria-label="사용자 메뉴">
+          <button className={publicView === "home" ? "active" : ""} onClick={() => setPublicView("home")} type="button">
+            홈
+          </button>
+          <button onClick={openSupport} type="button">
+            문의하기
+          </button>
+          <button className={publicView === "profile" ? "active" : ""} onClick={openProfilePage} type="button">
+            마이페이지
+          </button>
+        </nav>
+      </header>
 
-      <button className="support-launcher" onClick={openSupport} type="button">
-        <MessageCircle size={18} />
-        문의하기
-      </button>
+      {publicView === "home" ? (
+        <section className="logo-stage" aria-label="Council Talk">
+          <div className="wordmark">
+            <span className="wordmark-symbol" aria-hidden="true">C</span>
+            <h1>Council Talk</h1>
+          </div>
+          <button className="support-launcher" onClick={openSupport} type="button">
+            <MessageCircle size={18} />
+            문의하기
+          </button>
+        </section>
+      ) : (
+        <ProfilePage
+          handleProfileChangeRequest={handleProfileChangeRequest}
+          profileChangeForm={profileChangeForm}
+          profileChangeMessage={profileChangeMessage}
+          resetStudentProfile={resetStudentProfile}
+          setProfileChangeForm={setProfileChangeForm}
+          studentProfile={studentProfile}
+          studentThreads={studentThreads}
+        />
+      )}
 
       {isSupportOpen && !studentProfile && (
         <StudentAuthModal
+          authTarget={authTarget}
           authMode={authMode}
           handleIdentifyStudent={handleIdentifyStudent}
           identityError={identityError}
@@ -844,7 +898,6 @@ function App() {
           editingMessageId={editingMessageId}
           editingText={editingText}
           form={form}
-          handleProfileChangeRequest={handleProfileChangeRequest}
           handleCreateThread={handleCreateThread}
           handleMessageDelete={handleMessageDelete}
           handleMessageEditCancel={handleMessageEditCancel}
@@ -852,8 +905,6 @@ function App() {
           handleMessageUpdate={handleMessageUpdate}
           activeMessageMenuId={activeMessageMenuId}
           onRequestReopenThread={confirmReopenThread}
-          profileChangeForm={profileChangeForm}
-          profileChangeMessage={profileChangeMessage}
           handleStudentSend={handleStudentSend}
           resetStudentProfile={resetStudentProfile}
           setActiveMessageMenuId={setActiveMessageMenuId}
@@ -861,7 +912,6 @@ function App() {
           setEditingText={setEditingText}
           setForm={setForm}
           setIsSupportOpen={setIsSupportOpen}
-          setProfileChangeForm={setProfileChangeForm}
           setSupportView={setSupportView}
           setStudentMessage={setStudentMessage}
           studentProfile={studentProfile}
@@ -888,7 +938,86 @@ function App() {
   );
 }
 
+function ProfilePage({
+  handleProfileChangeRequest,
+  profileChangeForm,
+  profileChangeMessage,
+  resetStudentProfile,
+  setProfileChangeForm,
+  studentProfile,
+  studentThreads,
+}) {
+  return (
+    <section className="profile-page" aria-label="마이페이지">
+      <div className="profile-hero">
+        <p>My Page</p>
+        <h2>내 정보 관리</h2>
+        <span>이름과 학번 변경은 학생회 승인 후 적용됩니다.</span>
+      </div>
+
+      <div className="profile-layout">
+        <section className="profile-big-card">
+          <span>현재 로그인</span>
+          <strong>{studentProfile?.name}</strong>
+          <p>{studentProfile?.studentId}</p>
+          <div>
+            <small>문의방</small>
+            <b>{studentThreads.length}개</b>
+          </div>
+        </section>
+
+        <form className="profile-change-card" onSubmit={handleProfileChangeRequest}>
+          <div>
+            <p>Profile Change</p>
+            <h3>이름·학번 변경 신청</h3>
+          </div>
+
+          <label>
+            변경할 이름
+            <input
+              value={profileChangeForm.name}
+              onChange={(event) =>
+                setProfileChangeForm((current) => ({ ...current, name: event.target.value }))
+              }
+              placeholder="홍길동"
+            />
+          </label>
+
+          <label>
+            변경할 학번
+            <input
+              inputMode="numeric"
+              maxLength={4}
+              pattern="[0-9]{4}"
+              value={profileChangeForm.studentId}
+              onChange={(event) =>
+                setProfileChangeForm((current) => ({
+                  ...current,
+                  studentId: event.target.value.replace(/\D/g, "").slice(0, 4),
+                }))
+              }
+              placeholder="3105"
+            />
+          </label>
+
+          {profileChangeMessage && <p className="profile-message">{profileChangeMessage}</p>}
+
+          <div className="profile-actions">
+            <button className="black-button" type="submit">
+              변경 신청하기
+            </button>
+            <button className="ghost-button" onClick={resetStudentProfile} type="button">
+              로그아웃
+            </button>
+          </div>
+        </form>
+      </div>
+    </section>
+  );
+}
+
 function StudentAuthModal({
+  authTarget,
   authMode,
   handleIdentifyStudent,
   identityError,
@@ -927,7 +1056,9 @@ function StudentAuthModal({
         <p>
           {isSignup
             ? "처음 이용하는 경우 학번과 비밀번호를 등록해주세요."
-            : "이름과 비밀번호만 입력하면 문의방으로 이동합니다."}
+            : authTarget === "profile"
+              ? "이름과 비밀번호를 입력하면 마이페이지로 이동합니다."
+              : "이름과 비밀번호만 입력하면 문의방으로 이동합니다."}
         </p>
 
         <label>
@@ -1031,22 +1162,18 @@ function SupportPanel({
   activeMessageMenuId,
   form,
   handleCreateThread,
-  handleProfileChangeRequest,
   handleMessageDelete,
   handleMessageEditCancel,
   handleMessageEditStart,
   handleMessageUpdate,
   handleStudentSend,
   onRequestReopenThread,
-  profileChangeForm,
-  profileChangeMessage,
   resetStudentProfile,
   setActiveMessageMenuId,
   setCurrentThreadId,
   setEditingText,
   setForm,
   setIsSupportOpen,
-  setProfileChangeForm,
   setSupportView,
   setStudentMessage,
   studentProfile,
@@ -1071,7 +1198,7 @@ function SupportPanel({
   return (
     <aside className="support-panel" aria-label="문의하기">
       <header className="support-header">
-        {supportView !== "rooms" && supportView !== "profile" && (
+        {supportView !== "rooms" && (
           <button
             aria-label="문의방 목록으로 돌아가기"
             className="icon-button back-icon-button"
@@ -1090,25 +1217,6 @@ function SupportPanel({
           <X size={22} />
         </button>
       </header>
-
-      {(supportView === "rooms" || supportView === "profile") && (
-        <nav className="support-tabs" aria-label="유저 메뉴">
-          <button
-            className={supportView === "rooms" ? "active" : ""}
-            onClick={() => setSupportView("rooms")}
-            type="button"
-          >
-            문의방
-          </button>
-          <button
-            className={supportView === "profile" ? "active" : ""}
-            onClick={() => setSupportView("profile")}
-            type="button"
-          >
-            마이페이지
-          </button>
-        </nav>
-      )}
 
       {supportView === "rooms" && (
         <div className="rooms-view">
@@ -1148,58 +1256,6 @@ function SupportPanel({
             로그아웃
           </button>
         </div>
-      )}
-
-      {supportView === "profile" && (
-        <form className="profile-view" onSubmit={handleProfileChangeRequest}>
-          <div className="support-title rooms-title">
-            <h2>마이페이지</h2>
-            <p>이름과 학번은 관리자 승인 후 변경됩니다.</p>
-          </div>
-
-          <section className="profile-summary">
-            <span>현재 정보</span>
-            <strong>{studentProfile?.name}</strong>
-            <p>{studentProfile?.studentId}</p>
-          </section>
-
-          <label>
-            변경할 이름
-            <input
-              value={profileChangeForm.name}
-              onChange={(event) =>
-                setProfileChangeForm((current) => ({ ...current, name: event.target.value }))
-              }
-              placeholder="홍길동"
-            />
-          </label>
-
-          <label>
-            변경할 학번
-            <input
-              inputMode="numeric"
-              maxLength={4}
-              pattern="[0-9]{4}"
-              value={profileChangeForm.studentId}
-              onChange={(event) =>
-                setProfileChangeForm((current) => ({
-                  ...current,
-                  studentId: event.target.value.replace(/\D/g, "").slice(0, 4),
-                }))
-              }
-              placeholder="3105"
-            />
-          </label>
-
-          {profileChangeMessage && <p className="profile-message">{profileChangeMessage}</p>}
-
-          <button className="black-button" type="submit">
-            변경 신청
-          </button>
-          <button className="switch-student-button" onClick={resetStudentProfile} type="button">
-            로그아웃
-          </button>
-        </form>
       )}
 
       {supportView === "new" && (
