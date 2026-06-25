@@ -91,6 +91,8 @@ function App() {
   const [form, setForm] = useState(emptyForm);
   const [profileChangeForm, setProfileChangeForm] = useState(emptyProfileChangeForm);
   const [profileChangeMessage, setProfileChangeMessage] = useState("");
+  const [studentEmail, setStudentEmail] = useState("");
+  const [studentEmailMessage, setStudentEmailMessage] = useState("");
   const [currentThreadId, setCurrentThreadId] = useState(null);
   const [publicView, setPublicView] = useState("home");
   const [authTarget, setAuthTarget] = useState("support");
@@ -209,6 +211,7 @@ function App() {
         studentId: studentProfile.studentId,
         name: studentProfile.name,
       });
+      setStudentEmail(studentProfile.email || "");
     }
   }, [studentProfile]);
 
@@ -401,6 +404,8 @@ function App() {
     setIdentityForm(emptyIdentity);
     setProfileChangeForm(emptyProfileChangeForm);
     setProfileChangeMessage("");
+    setStudentEmail("");
+    setStudentEmailMessage("");
     setPublicView("home");
     setIdentityError("");
     setAuthMode("login");
@@ -437,6 +442,34 @@ function App() {
       setProfileChangeMessage("변경 신청이 접수되었습니다. 관리자가 승인하면 새 정보로 로그인할 수 있습니다.");
     } catch {
       setProfileChangeMessage("이미 사용 중인 정보이거나 입력값을 다시 확인해주세요.");
+    }
+  };
+
+  const handleStudentEmailUpdate = async (event) => {
+    event.preventDefault();
+
+    if (!studentProfile) {
+      return;
+    }
+
+    try {
+      const data = await apiRequest("/api/students/email", {
+        method: "PATCH",
+        body: JSON.stringify({
+          studentId: studentProfile.studentId,
+          name: studentProfile.name,
+          pin: studentProfile.pin,
+          email: studentEmail.trim(),
+        }),
+      });
+      const nextProfile = { ...studentProfile, ...data.profile };
+      setStudentProfile(nextProfile);
+      setStudentEmail(nextProfile.email || "");
+      setStudentEmailMessage(
+        nextProfile.email ? "답변 알림 이메일이 저장되었습니다." : "답변 알림 이메일이 비워졌습니다.",
+      );
+    } catch {
+      setStudentEmailMessage("이메일 형식을 확인해주세요.");
     }
   };
 
@@ -946,11 +979,15 @@ function App() {
         </section>
       ) : (
         <ProfilePage
+          handleStudentEmailUpdate={handleStudentEmailUpdate}
           handleProfileChangeRequest={handleProfileChangeRequest}
           profileChangeForm={profileChangeForm}
           profileChangeMessage={profileChangeMessage}
           resetStudentProfile={resetStudentProfile}
           setProfileChangeForm={setProfileChangeForm}
+          setStudentEmail={setStudentEmail}
+          studentEmail={studentEmail}
+          studentEmailMessage={studentEmailMessage}
           studentProfile={studentProfile}
           studentThreads={studentThreads}
         />
@@ -1017,11 +1054,15 @@ function App() {
 }
 
 function ProfilePage({
+  handleStudentEmailUpdate,
   handleProfileChangeRequest,
   profileChangeForm,
   profileChangeMessage,
   resetStudentProfile,
   setProfileChangeForm,
+  setStudentEmail,
+  studentEmail,
+  studentEmailMessage,
   studentProfile,
   studentThreads,
 }) {
@@ -1086,6 +1127,35 @@ function ProfilePage({
             </button>
             <button className="ghost-button" onClick={resetStudentProfile} type="button">
               로그아웃
+            </button>
+          </div>
+        </form>
+
+        <form className="profile-email-card" onSubmit={handleStudentEmailUpdate}>
+          <div>
+            <p>Reply Notification</p>
+            <h3>답변 알림 이메일</h3>
+            <span>학생회 답변이 오면 등록한 이메일로 알려드립니다.</span>
+          </div>
+
+          <label>
+            이메일
+            <input
+              type="email"
+              value={studentEmail}
+              onChange={(event) => setStudentEmail(event.target.value)}
+              placeholder="student@example.com"
+            />
+          </label>
+
+          {studentEmailMessage && <p className="profile-message">{studentEmailMessage}</p>}
+
+          <div className="profile-actions">
+            <button className="black-button" type="submit">
+              이메일 저장
+            </button>
+            <button className="ghost-button" onClick={() => setStudentEmail("")} type="button">
+              비우기
             </button>
           </div>
         </form>
@@ -1856,7 +1926,7 @@ function AdminScreen({
 
   return (
     <main className="admin-page">
-      <aside className="inbox">
+      <aside className="admin-menu">
         <header>
           <div className="admin-wordmark">
             <span className="wordmark-symbol" aria-hidden="true">C</span>
@@ -1912,6 +1982,35 @@ function AdminScreen({
             placeholder="답변자 이름"
           />
         </label>
+      </aside>
+
+      <aside className="inbox">
+        <header className="inbox-context-head">
+          <div>
+            <strong>
+              {adminSection === "inquiries"
+                ? "문의 목록"
+                : adminSection === "students"
+                  ? "학생 목록"
+                  : adminSection === "requests"
+                    ? "변경 신청"
+                    : adminSection === "tags"
+                      ? "태그 관리"
+                      : "알림 설정"}
+            </strong>
+            <span>
+              {adminSection === "inquiries"
+                ? `${threads.length}개 표시`
+                : adminSection === "students"
+                  ? `${students.length}명`
+                  : adminSection === "requests"
+                    ? `${pendingProfileRequests.length}건 대기`
+                    : adminSection === "tags"
+                      ? `${tags.length}개 태그`
+                      : `${notificationEmails.length}개 이메일`}
+            </span>
+          </div>
+        </header>
 
         {adminSection === "inquiries" && (
           <>
@@ -2013,6 +2112,17 @@ function AdminScreen({
               </button>
             ))}
           </div>
+        )}
+
+        {(adminSection === "tags" || adminSection === "notifications") && (
+          <section className="section-sidebar-card">
+            <strong>{adminSection === "tags" ? "분류 설정" : "이메일 알림"}</strong>
+            <p>
+              {adminSection === "tags"
+                ? "학생이 문의 등록 시 선택할 태그를 관리합니다."
+                : "채팅방 생성과 답변 알림 수신 이메일을 관리합니다."}
+            </p>
+          </section>
         )}
       </aside>
 

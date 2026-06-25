@@ -223,7 +223,8 @@ textarea:focus {
 }
 
 .profile-hero p,
-.profile-change-card p {
+.profile-change-card p,
+.profile-email-card p {
   margin: 0;
   color: var(--muted);
   font-size: 14px;
@@ -249,7 +250,8 @@ textarea:focus {
 }
 
 .profile-big-card,
-.profile-change-card {
+.profile-change-card,
+.profile-email-card {
   border: 1px solid var(--line);
   border-radius: 16px;
   background: #ffffff;
@@ -302,18 +304,29 @@ textarea:focus {
   font-size: 24px;
 }
 
-.profile-change-card {
+.profile-change-card,
+.profile-email-card {
   display: grid;
   gap: 18px;
   padding: 30px;
 }
 
-.profile-change-card h3 {
+.profile-change-card h3,
+.profile-email-card h3 {
   margin: 5px 0 0;
   font-size: 30px;
 }
 
-.profile-change-card label {
+.profile-email-card > div span {
+  display: block;
+  margin-top: 8px;
+  color: var(--muted);
+  font-size: 14px;
+  line-height: 1.5;
+}
+
+.profile-change-card label,
+.profile-email-card label {
   display: grid;
   gap: 8px;
   color: #474747;
@@ -1064,11 +1077,12 @@ textarea:focus {
 
 .admin-page {
   display: grid;
-  grid-template-columns: 360px 1fr;
+  grid-template-columns: 250px 360px 1fr;
   min-height: 100vh;
   background: #ffffff;
 }
 
+.admin-menu,
 .inbox {
   display: flex;
   flex-direction: column;
@@ -1076,9 +1090,14 @@ textarea:focus {
   border-right: 1px solid var(--line);
 }
 
-.inbox header {
+.admin-menu {
+  background: #ffffff;
+}
+
+.admin-menu header,
+.inbox-context-head {
   display: flex;
-  align-items: flex-end;
+  align-items: flex-start;
   justify-content: space-between;
   gap: 14px;
   padding: 26px 24px 18px;
@@ -1098,28 +1117,47 @@ textarea:focus {
   font-size: 12px;
 }
 
-.inbox h1 {
+.admin-menu h1 {
   margin: 0;
   font-size: 24px;
   letter-spacing: 0;
 }
 
-.inbox header span,
+.admin-menu header span,
+.inbox-context-head span,
 .empty-copy,
 .conversation-head p {
   color: var(--muted);
 }
 
+.inbox-context-head {
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.inbox-context-head div {
+  display: grid;
+  gap: 5px;
+}
+
+.inbox-context-head strong {
+  color: var(--ink);
+  font-size: 18px;
+}
+
 .admin-nav {
   display: grid;
-  grid-template-columns: 1fr 1fr;
+  grid-template-columns: 1fr;
   gap: 8px;
   padding: 0 18px 18px;
 }
 
 .admin-nav button {
   position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   height: 40px;
+  padding: 0 12px;
   border: 1px solid var(--line);
   border-radius: 7px;
   background: #ffffff;
@@ -1129,9 +1167,7 @@ textarea:focus {
 }
 
 .admin-nav button span {
-  position: absolute;
-  top: -7px;
-  right: -6px;
+  position: static;
   display: grid;
   min-width: 20px;
   height: 20px;
@@ -1158,6 +1194,27 @@ textarea:focus {
   padding: 8px 10px;
   border: 1px solid var(--line);
   border-radius: 7px;
+}
+
+.section-sidebar-card {
+  display: grid;
+  gap: 8px;
+  margin: 18px;
+  padding: 18px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+
+.section-sidebar-card strong {
+  color: var(--ink);
+}
+
+.section-sidebar-card p {
+  margin: 0;
+  color: var(--muted);
+  font-size: 13px;
+  line-height: 1.55;
 }
 
 .admin-name input {
@@ -1805,10 +1862,15 @@ textarea:focus {
     grid-template-columns: 1fr;
   }
 
+  .admin-menu,
   .inbox {
     min-height: 320px;
     border-right: 0;
     border-bottom: 1px solid var(--line);
+  }
+
+  .admin-nav {
+    grid-template-columns: 1fr 1fr;
   }
 
   .wordmark {
@@ -1867,7 +1929,17 @@ textarea:focus {
 
 @media (max-width: 980px) {
   .admin-page {
-    grid-template-columns: 320px 1fr;
+    grid-template-columns: 1fr;
+  }
+
+  .admin-menu {
+    border-right: 0;
+    border-bottom: 1px solid var(--line);
+  }
+
+  .admin-nav {
+    grid-template-columns: repeat(5, minmax(120px, 1fr));
+    overflow-x: auto;
   }
 
   .conversation-head {
@@ -1910,6 +1982,7 @@ textarea:focus {
   }
 
   .profile-change-card,
+  .profile-email-card,
   .profile-big-card {
     padding: 22px;
     border-radius: 12px;
@@ -1977,6 +2050,7 @@ textarea:focus {
   }
 
   .admin-nav {
+    grid-template-columns: 1fr 1fr;
     padding-left: 18px;
     padding-right: 18px;
   }

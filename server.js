@@ -267,9 +267,61 @@ const sendThreadCreatedNotification = async (thread, request) => {
   }
 };
 
+const sendStudentReplyNotification = async (thread, message, request) => {
+  const students = await readStudents();
+  const student = students[studentKey(thread)];
+  const recipient = student?.email;
+
+  if (!recipient) {
+    return;
+  }
+
+  const transporter = createTransporter();
+  const url = `${getBaseUrl(request)}/`;
+
+  if (!transporter) {
+    console.log(`[student mail skipped] ${thread.title} -> ${recipient} ${url}`);
+    return;
+  }
+
+  try {
+    const safeTitle = escapeHtml(thread.title);
+    const safeName = escapeHtml(message.authorLabel || "학생회");
+    const safeText = escapeHtml(message.text);
+    const safeUrl = escapeHtml(url);
+
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to: recipient,
+      subject: `[Council Talk] 답변이 도착했습니다: ${thread.title}`,
+      text: [
+        "학생회 답변이 도착했습니다.",
+        "",
+        `문의: ${thread.title}`,
+        `답변자: ${message.authorLabel || "학생회"}`,
+        `내용: ${message.text}`,
+        "",
+        `확인하기: ${url}`,
+      ].join("\n"),
+      html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.6;color:#202123">
+          <h2>학생회 답변이 도착했습니다.</h2>
+          <p><strong>문의</strong>: ${safeTitle}</p>
+          <p><strong>답변자</strong>: ${safeName}</p>
+          <p>${safeText}</p>
+          <p><a href="${safeUrl}" style="display:inline-block;padding:10px 14px;background:#171717;color:#fff;text-decoration:none;border-radius:7px">Council Talk에서 확인</a></p>
+        </div>
+      `,
+    });
+  } catch (error) {
+    console.error("[student mail failed]", error.message);
+  }
+};
+
 const publicStudent = (student) => ({
   studentId: student.studentId,
   name: student.name,
+  email: student.email || "",
   createdAt: student.createdAt,
   updatedAt: student.updatedAt,
 });
@@ -292,7 +344,7 @@ const resolveStudentByNameAndPin = async ({ name, pin }) => {
     (student) => student.name === cleanName && student.pinHash === hashPin(cleanPin),
   );
 
-  return saved ? normalizeStudent(saved) : null;
+  return saved ? publicStudent(saved) : null;
 };
 
 const ensureStudentSession = async ({ studentId, name, pin }, { createIfMissing = false } = {}) => {
@@ -324,7 +376,7 @@ const ensureStudentSession = async ({ studentId, name, pin }, { createIfMissing 
     await writeStudents(students);
   }
 
-  return profile;
+  return saved ? publicStudent(saved) : publicStudent(students[key]);
 };
 
 const studentExists = async ({ studentId, name }) => {
@@ -478,6 +530,35 @@ app.post("/api/students/signup", async (request, response) => {
   }
 
   response.status(201).json({ profile, threads: [] });
+});
+
+app.patch("/api/students/email", async (request, response) => {
+  const profile = await ensureStudentSession(request.body || {});
+  const email = normalizeEmail(request.body?.email);
+
+  if (!profile || (email && !isValidEmail(email))) {
+    response.status(400).json({ message: "Invalid student email" });
+    return;
+  }
+
+  const nextProfile = await enqueueStudentUpdate(async (students) => {
+    const key = studentKey(profile);
+
+    if (!students[key]) {
+      return null;
+    }
+
+    students[key].email = email;
+    students[key].updatedAt = new Date().toISOString();
+    return publicStudent(students[key]);
+  });
+
+  if (!nextProfile) {
+    response.status(404).json({ message: "Student not found" });
+    return;
+  }
+
+  response.json({ profile: nextProfile });
 });
 
 app.get("/api/students", async (_request, response) => {
@@ -684,6 +765,13 @@ app.post("/api/admin/student-chat", async (request, response) => {
   const authorLabel = String(request.body?.authorLabel || "학생회").trim();
   const title = String(request.body?.title || "학생회 1:1 대화").trim();
   const message = String(request.body?.message || "학생회에서 대화를 시작했습니다.").trim();
+  const initialMessage = {
+    id: crypto.randomUUID(),
+    author: "admin",
+    authorLabel,
+    time: timeLabel(),
+    text: message,
+  };
   const thread = {
     id: crypto.randomUUID(),
     studentId: profile.studentId,
@@ -694,15 +782,7 @@ app.post("/api/admin/student-chat", async (request, response) => {
     status: "진행중",
     createdAt: now,
     updatedAt: now,
-    messages: [
-      {
-        id: crypto.randomUUID(),
-        author: "admin",
-        authorLabel,
-        time: timeLabel(),
-        text: message,
-      },
-    ],
+    messages: [initialMessage],
   };
 
   const threads = await enqueueThreadUpdate(async (currentThreads) => {
@@ -711,6 +791,7 @@ app.post("/api/admin/student-chat", async (request, response) => {
   });
 
   await sendThreadCreatedNotification(thread, request);
+  await sendStudentReplyNotification(thread, initialMessage, request);
   response.status(201).json({ thread, threads });
 });
 
@@ -745,16 +826,18 @@ app.post("/api/threads/:id/messages", async (request, response) => {
 
     thread.status = author === "admin" ? "진행중" : "미완료";
     thread.updatedAt = new Date().toISOString();
-    thread.messages.push({
+    const message = {
       id: crypto.randomUUID(),
       author,
       authorLabel: author === "admin" ? String(authorLabel || "학생회").trim() : thread.name,
       time: timeLabel(),
       text: String(text).trim(),
-    });
+    };
+    thread.messages.push(message);
 
     return {
       thread,
+      message,
       threads:
         author === "student"
           ? threads.filter(
@@ -779,7 +862,10 @@ app.post("/api/threads/:id/messages", async (request, response) => {
     return;
   }
 
-  const { thread, threads } = result;
+  const { thread, threads, message } = result;
+  if (message?.author === "admin") {
+    await sendStudentReplyNotification(thread, message, request);
+  }
   response.json({ thread, threads });
 });
 
