@@ -34,6 +34,11 @@ const emptyIdentity = {
   pin: "",
 };
 
+const emptyProfileChangeForm = {
+  studentId: "",
+  name: "",
+};
+
 const getTimeLabel = () =>
   new Intl.DateTimeFormat("ko-KR", {
     hour: "2-digit",
@@ -73,13 +78,18 @@ const normalizeStatus = (status) => {
 };
 
 const normalizeTags = (tags) => (Array.isArray(tags) ? tags : []);
+const studentKey = (student) => `${student.studentId}:${student.name}`;
 
 function App() {
   const [route, setRoute] = useState(() => window.location.pathname);
   const [threads, setThreads] = useState(loadThreads);
   const [tags, setTags] = useState([]);
+  const [students, setStudents] = useState([]);
+  const [profileRequests, setProfileRequests] = useState([]);
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
+  const [profileChangeForm, setProfileChangeForm] = useState(emptyProfileChangeForm);
+  const [profileChangeMessage, setProfileChangeMessage] = useState("");
   const [currentThreadId, setCurrentThreadId] = useState(null);
   const [studentProfile, setStudentProfile] = useState(() => {
     try {
@@ -110,6 +120,8 @@ function App() {
   const [adminFilter, setAdminFilter] = useState("all");
   const [adminTagFilter, setAdminTagFilter] = useState("all");
   const [adminSection, setAdminSection] = useState("inquiries");
+  const [selectedStudentKey, setSelectedStudentKey] = useState("");
+  const [adminStudentMessage, setAdminStudentMessage] = useState("");
   const [tagName, setTagName] = useState("");
   const isAdminRoute = route.startsWith("/admin");
 
@@ -143,9 +155,7 @@ function App() {
       return;
     }
 
-    apiRequest("/api/threads")
-      .then((data) => setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) }))))
-      .catch(() => setThreads(loadThreads()));
+    loadAdminData();
   }, [adminAuthed, isAdminRoute]);
 
   useEffect(() => {
@@ -159,6 +169,10 @@ function App() {
   useEffect(() => {
     if (studentProfile) {
       sessionStorage.setItem("council-talk-student", JSON.stringify(studentProfile));
+      setProfileChangeForm({
+        studentId: studentProfile.studentId,
+        name: studentProfile.name,
+      });
     }
   }, [studentProfile]);
 
@@ -167,6 +181,12 @@ function App() {
       setSelectedThreadId(threads[0].id);
     }
   }, [selectedThreadId, threads]);
+
+  useEffect(() => {
+    if (!selectedStudentKey && students.length > 0) {
+      setSelectedStudentKey(studentKey(students[0]));
+    }
+  }, [selectedStudentKey, students]);
 
   useEffect(() => {
     const visibleThreads = threads.filter((thread) => {
@@ -186,6 +206,7 @@ function App() {
 
   const currentThread = threads.find((thread) => thread.id === currentThreadId);
   const selectedThread = threads.find((thread) => thread.id === selectedThreadId);
+  const selectedStudent = students.find((student) => studentKey(student) === selectedStudentKey);
   const studentThreads = studentProfile
     ? threads.filter(
         (thread) =>
@@ -223,6 +244,12 @@ function App() {
     },
     { all: 0, untagged: 0 },
   );
+  const pendingProfileRequests = profileRequests.filter((request) => request.status === "대기");
+  const studentThreadCounts = threads.reduce((counts, thread) => {
+    const key = studentKey(thread);
+    counts[key] = (counts[key] || 0) + 1;
+    return counts;
+  }, {});
   const goTo = (path) => {
     window.history.pushState({}, "", path);
     setRoute(path);
@@ -234,6 +261,23 @@ function App() {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(next));
       return next;
     });
+  };
+
+  const loadAdminData = async () => {
+    try {
+      const [threadData, tagData, studentData, requestData] = await Promise.all([
+        apiRequest("/api/threads"),
+        apiRequest("/api/tags"),
+        apiRequest("/api/students"),
+        apiRequest("/api/profile-requests"),
+      ]);
+      setThreads(threadData.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+      setTags(normalizeTags(tagData.tags));
+      setStudents(studentData.students || []);
+      setProfileRequests(requestData.requests || []);
+    } catch {
+      setThreads(loadThreads());
+    }
   };
 
   const completeStudentAuth = (profile, data) => {
@@ -290,9 +334,44 @@ function App() {
     setStudentProfile(null);
     setCurrentThreadId(null);
     setIdentityForm(emptyIdentity);
+    setProfileChangeForm(emptyProfileChangeForm);
+    setProfileChangeMessage("");
     setIdentityError("");
     setAuthMode("login");
     setSupportView("rooms");
+  };
+
+  const handleProfileChangeRequest = async (event) => {
+    event.preventDefault();
+    const nextStudentId = profileChangeForm.studentId.trim();
+    const nextName = profileChangeForm.name.trim();
+
+    if (!studentProfile || !/^\d{4}$/.test(nextStudentId) || !nextName) {
+      setProfileChangeMessage("학번은 4자리 숫자, 이름은 빈칸 없이 입력해주세요.");
+      return;
+    }
+
+    if (studentProfile.studentId === nextStudentId && studentProfile.name === nextName) {
+      setProfileChangeMessage("현재 정보와 같아서 변경 신청할 내용이 없습니다.");
+      return;
+    }
+
+    try {
+      const data = await apiRequest("/api/students/profile-change", {
+        method: "POST",
+        body: JSON.stringify({
+          studentId: studentProfile.studentId,
+          name: studentProfile.name,
+          pin: studentProfile.pin,
+          newStudentId: nextStudentId,
+          newName: nextName,
+        }),
+      });
+      setProfileRequests(data.requests || []);
+      setProfileChangeMessage("변경 신청이 접수되었습니다. 관리자가 승인하면 새 정보로 로그인할 수 있습니다.");
+    } catch {
+      setProfileChangeMessage("이미 사용 중인 정보이거나 입력값을 다시 확인해주세요.");
+    }
   };
 
   const handleCreateThread = async (event) => {
@@ -407,10 +486,7 @@ function App() {
       sessionStorage.setItem("council-talk-admin", "true");
       setAdminAuthed(true);
       setAdminPassword("");
-      const data = await apiRequest("/api/threads");
-      setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
-      const tagData = await apiRequest("/api/tags");
-      setTags(normalizeTags(tagData.tags));
+      await loadAdminData();
     } catch {
       setAdminError("비밀번호가 틀렸습니다.");
       setAdminPassword("");
@@ -559,6 +635,46 @@ function App() {
     }
   };
 
+  const handleProfileRequestReview = async (requestId, status) => {
+    try {
+      const data = await apiRequest(`/api/profile-requests/${requestId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status }),
+      });
+      setProfileRequests(data.requests || []);
+      setStudents(data.students || []);
+      setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+    } catch {
+      await loadAdminData();
+    }
+  };
+
+  const handleCreateStudentChat = async (event) => {
+    event.preventDefault();
+
+    if (!selectedStudent || !adminStudentMessage.trim()) {
+      return;
+    }
+
+    try {
+      const data = await apiRequest("/api/admin/student-chat", {
+        method: "POST",
+        body: JSON.stringify({
+          studentId: selectedStudent.studentId,
+          name: selectedStudent.name,
+          authorLabel: adminName.trim() || "학생회",
+          message: adminStudentMessage.trim(),
+        }),
+      });
+      setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+      setSelectedThreadId(data.thread.id);
+      setAdminSection("inquiries");
+      setAdminStudentMessage("");
+    } catch {
+      setAdminStudentMessage("");
+    }
+  };
+
   const openConfirmDialog = ({ title, message, confirmLabel = "예", onConfirm }) => {
     setConfirmDialog({ title, message, confirmLabel, onConfirm });
   };
@@ -637,35 +753,46 @@ function App() {
           adminReply={adminReply}
           adminSection={adminSection}
           adminTagFilter={adminTagFilter}
+          adminStudentMessage={adminStudentMessage}
           handleCreateTag={handleCreateTag}
           handleAdminLogin={handleAdminLogin}
           handleAdminReply={handleAdminReply}
           handleAdminStatusChange={handleAdminStatusChange}
+          handleCreateStudentChat={handleCreateStudentChat}
           handleDeleteTag={handleDeleteTag}
           handleMessageDelete={handleMessageDelete}
           handleMessageEditCancel={handleMessageEditCancel}
           handleMessageEditStart={handleMessageEditStart}
           handleMessageUpdate={handleMessageUpdate}
+          handleProfileRequestReview={handleProfileRequestReview}
           editingMessageId={editingMessageId}
           editingText={editingText}
           activeMessageMenuId={activeMessageMenuId}
+          pendingProfileRequests={pendingProfileRequests}
           selectedThread={selectedThread}
           selectedThreadId={selectedThreadId}
+          selectedStudent={selectedStudent}
+          selectedStudentKey={selectedStudentKey}
           setAdminFilter={setAdminFilter}
           setAdminName={setAdminName}
           setAdminPassword={setAdminPassword}
           setAdminReply={setAdminReply}
           setAdminSection={setAdminSection}
           setAdminTagFilter={setAdminTagFilter}
+          setAdminStudentMessage={setAdminStudentMessage}
           setActiveMessageMenuId={setActiveMessageMenuId}
           setEditingText={setEditingText}
           setSelectedThreadId={setSelectedThreadId}
+          setSelectedStudentKey={setSelectedStudentKey}
           setTagName={setTagName}
           statusCounts={statusCounts}
+          studentThreadCounts={studentThreadCounts}
+          students={students}
           tagCounts={tagCounts}
           tagName={tagName}
           tags={tags}
           onRequestDeleteTag={confirmTagDelete}
+          profileRequests={profileRequests}
           threads={filteredAdminThreads}
         />
         {confirmDialog && (
@@ -717,6 +844,7 @@ function App() {
           editingMessageId={editingMessageId}
           editingText={editingText}
           form={form}
+          handleProfileChangeRequest={handleProfileChangeRequest}
           handleCreateThread={handleCreateThread}
           handleMessageDelete={handleMessageDelete}
           handleMessageEditCancel={handleMessageEditCancel}
@@ -724,6 +852,8 @@ function App() {
           handleMessageUpdate={handleMessageUpdate}
           activeMessageMenuId={activeMessageMenuId}
           onRequestReopenThread={confirmReopenThread}
+          profileChangeForm={profileChangeForm}
+          profileChangeMessage={profileChangeMessage}
           handleStudentSend={handleStudentSend}
           resetStudentProfile={resetStudentProfile}
           setActiveMessageMenuId={setActiveMessageMenuId}
@@ -731,6 +861,7 @@ function App() {
           setEditingText={setEditingText}
           setForm={setForm}
           setIsSupportOpen={setIsSupportOpen}
+          setProfileChangeForm={setProfileChangeForm}
           setSupportView={setSupportView}
           setStudentMessage={setStudentMessage}
           studentProfile={studentProfile}
@@ -900,18 +1031,22 @@ function SupportPanel({
   activeMessageMenuId,
   form,
   handleCreateThread,
+  handleProfileChangeRequest,
   handleMessageDelete,
   handleMessageEditCancel,
   handleMessageEditStart,
   handleMessageUpdate,
   handleStudentSend,
   onRequestReopenThread,
+  profileChangeForm,
+  profileChangeMessage,
   resetStudentProfile,
   setActiveMessageMenuId,
   setCurrentThreadId,
   setEditingText,
   setForm,
   setIsSupportOpen,
+  setProfileChangeForm,
   setSupportView,
   setStudentMessage,
   studentProfile,
@@ -936,7 +1071,7 @@ function SupportPanel({
   return (
     <aside className="support-panel" aria-label="문의하기">
       <header className="support-header">
-        {supportView !== "rooms" && (
+        {supportView !== "rooms" && supportView !== "profile" && (
           <button
             aria-label="문의방 목록으로 돌아가기"
             className="icon-button back-icon-button"
@@ -955,6 +1090,25 @@ function SupportPanel({
           <X size={22} />
         </button>
       </header>
+
+      {(supportView === "rooms" || supportView === "profile") && (
+        <nav className="support-tabs" aria-label="유저 메뉴">
+          <button
+            className={supportView === "rooms" ? "active" : ""}
+            onClick={() => setSupportView("rooms")}
+            type="button"
+          >
+            문의방
+          </button>
+          <button
+            className={supportView === "profile" ? "active" : ""}
+            onClick={() => setSupportView("profile")}
+            type="button"
+          >
+            마이페이지
+          </button>
+        </nav>
+      )}
 
       {supportView === "rooms" && (
         <div className="rooms-view">
@@ -994,6 +1148,58 @@ function SupportPanel({
             로그아웃
           </button>
         </div>
+      )}
+
+      {supportView === "profile" && (
+        <form className="profile-view" onSubmit={handleProfileChangeRequest}>
+          <div className="support-title rooms-title">
+            <h2>마이페이지</h2>
+            <p>이름과 학번은 관리자 승인 후 변경됩니다.</p>
+          </div>
+
+          <section className="profile-summary">
+            <span>현재 정보</span>
+            <strong>{studentProfile?.name}</strong>
+            <p>{studentProfile?.studentId}</p>
+          </section>
+
+          <label>
+            변경할 이름
+            <input
+              value={profileChangeForm.name}
+              onChange={(event) =>
+                setProfileChangeForm((current) => ({ ...current, name: event.target.value }))
+              }
+              placeholder="홍길동"
+            />
+          </label>
+
+          <label>
+            변경할 학번
+            <input
+              inputMode="numeric"
+              maxLength={4}
+              pattern="[0-9]{4}"
+              value={profileChangeForm.studentId}
+              onChange={(event) =>
+                setProfileChangeForm((current) => ({
+                  ...current,
+                  studentId: event.target.value.replace(/\D/g, "").slice(0, 4),
+                }))
+              }
+              placeholder="3105"
+            />
+          </label>
+
+          {profileChangeMessage && <p className="profile-message">{profileChangeMessage}</p>}
+
+          <button className="black-button" type="submit">
+            변경 신청
+          </button>
+          <button className="switch-student-button" onClick={resetStudentProfile} type="button">
+            로그아웃
+          </button>
+        </form>
       )}
 
       {supportView === "new" && (
@@ -1182,6 +1388,107 @@ function TagAdminPanel({
   );
 }
 
+function StudentAdminPanel({
+  adminName,
+  adminStudentMessage,
+  handleCreateStudentChat,
+  selectedStudent,
+  setAdminStudentMessage,
+  studentThreadCount,
+  students,
+}) {
+  return (
+    <div className="student-admin-page">
+      <header>
+        <div>
+          <p>Student Manager</p>
+          <h2>학생 관리</h2>
+        </div>
+        <span>{students.length}명</span>
+      </header>
+
+      {selectedStudent ? (
+        <section className="student-detail-card">
+          <div>
+            <span>선택한 학생</span>
+            <h3>{selectedStudent.name}</h3>
+            <p>{selectedStudent.studentId} · {studentThreadCount}개 대화</p>
+          </div>
+
+          <form onSubmit={handleCreateStudentChat}>
+            <label>
+              1:1 대화 시작 메시지
+              <textarea
+                value={adminStudentMessage}
+                onChange={(event) => setAdminStudentMessage(event.target.value)}
+                placeholder={`${adminName || "학생회"} 이름으로 먼저 말을 걸 수 있습니다.`}
+                rows={5}
+              />
+            </label>
+            <button className="black-button" type="submit">
+              1:1 채팅 만들기
+            </button>
+          </form>
+        </section>
+      ) : (
+        <div className="empty-conversation">학생을 선택하세요.</div>
+      )}
+    </div>
+  );
+}
+
+function ProfileRequestAdminPanel({ handleProfileRequestReview, profileRequests }) {
+  const pending = profileRequests.filter((request) => request.status === "대기");
+  const reviewed = profileRequests.filter((request) => request.status !== "대기");
+
+  return (
+    <div className="profile-request-page">
+      <header>
+        <div>
+          <p>Profile Requests</p>
+          <h2>이름·학번 변경 신청</h2>
+        </div>
+        <span>{pending.length}건 대기</span>
+      </header>
+
+      <section className="request-card-list">
+        {pending.length === 0 && <p className="empty-copy">대기 중인 변경 신청이 없습니다.</p>}
+        {pending.map((request) => (
+          <article className="request-card" key={request.id}>
+            <div>
+              <strong>{request.name}</strong>
+              <span>{request.studentId}</span>
+            </div>
+            <p>
+              {request.newName} · {request.newStudentId} 으로 변경을 신청했습니다.
+            </p>
+            <div>
+              <button onClick={() => handleProfileRequestReview(request.id, "거절")} type="button">
+                거절
+              </button>
+              <button onClick={() => handleProfileRequestReview(request.id, "승인")} type="button">
+                승인
+              </button>
+            </div>
+          </article>
+        ))}
+      </section>
+
+      {reviewed.length > 0 && (
+        <section className="reviewed-request-list">
+          <h3>처리된 신청</h3>
+          {reviewed.slice(0, 8).map((request) => (
+            <p key={request.id}>
+              <strong>{request.status}</strong>
+              {request.name} · {request.studentId} → {request.newName} · {request.newStudentId}
+            </p>
+          ))}
+        </section>
+      )}
+    </div>
+  );
+}
+
 function MessageBubble({
   actor,
   activeMessageMenuId,
@@ -1286,35 +1593,46 @@ function AdminScreen({
   adminReply,
   adminSection,
   adminTagFilter,
+  adminStudentMessage,
   handleCreateTag,
   handleAdminLogin,
   handleAdminReply,
   handleAdminStatusChange,
+  handleCreateStudentChat,
   handleDeleteTag,
   handleMessageDelete,
   handleMessageEditCancel,
   handleMessageEditStart,
   handleMessageUpdate,
+  handleProfileRequestReview,
   editingMessageId,
   editingText,
   activeMessageMenuId,
   onRequestDeleteTag,
+  pendingProfileRequests,
   selectedThread,
   selectedThreadId,
+  selectedStudent,
+  selectedStudentKey,
   setAdminFilter,
   setAdminName,
   setAdminPassword,
   setAdminReply,
   setAdminSection,
   setAdminTagFilter,
+  setAdminStudentMessage,
   setActiveMessageMenuId,
   setEditingText,
   setSelectedThreadId,
+  setSelectedStudentKey,
   setTagName,
   statusCounts,
+  studentThreadCounts,
+  students,
   tagCounts,
   tagName,
   tags,
+  profileRequests,
   threads,
 }) {
   if (!adminAuthed) {
@@ -1364,6 +1682,21 @@ function AdminScreen({
             type="button"
           >
             태그 관리
+          </button>
+          <button
+            className={adminSection === "students" ? "active" : ""}
+            onClick={() => setAdminSection("students")}
+            type="button"
+          >
+            학생 관리
+          </button>
+          <button
+            className={adminSection === "requests" ? "active" : ""}
+            onClick={() => setAdminSection("requests")}
+            type="button"
+          >
+            변경 신청
+            {pendingProfileRequests.length > 0 && <span>{pendingProfileRequests.length}</span>}
           </button>
         </nav>
 
@@ -1445,6 +1778,38 @@ function AdminScreen({
             </div>
           </>
         )}
+
+        {adminSection === "students" && (
+          <div className="student-admin-list">
+            {students.length === 0 && <p className="empty-copy">가입한 학생이 없습니다.</p>}
+            {students.map((student) => (
+              <button
+                className={selectedStudentKey === studentKey(student) ? "active" : ""}
+                key={studentKey(student)}
+                onClick={() => setSelectedStudentKey(studentKey(student))}
+                type="button"
+              >
+                <strong>{student.name}</strong>
+                <span>{student.studentId}</span>
+                <small>{studentThreadCounts[studentKey(student)] || 0}개 대화</small>
+              </button>
+            ))}
+          </div>
+        )}
+
+        {adminSection === "requests" && (
+          <div className="request-mini-list">
+            {pendingProfileRequests.length === 0 && <p className="empty-copy">대기 중인 변경 신청이 없습니다.</p>}
+            {pendingProfileRequests.map((request) => (
+              <button key={request.id} type="button">
+                <strong>{request.name}</strong>
+                <span>
+                  {request.studentId} → {request.newStudentId}
+                </span>
+              </button>
+            ))}
+          </div>
+        )}
       </aside>
 
       <section className="admin-conversation">
@@ -1457,6 +1822,21 @@ function AdminScreen({
             tagCounts={tagCounts}
             tagName={tagName}
             tags={tags}
+          />
+        ) : adminSection === "students" ? (
+          <StudentAdminPanel
+            adminName={adminName}
+            adminStudentMessage={adminStudentMessage}
+            handleCreateStudentChat={handleCreateStudentChat}
+            selectedStudent={selectedStudent}
+            setAdminStudentMessage={setAdminStudentMessage}
+            studentThreadCount={selectedStudent ? studentThreadCounts[studentKey(selectedStudent)] || 0 : 0}
+            students={students}
+          />
+        ) : adminSection === "requests" ? (
+          <ProfileRequestAdminPanel
+            handleProfileRequestReview={handleProfileRequestReview}
+            profileRequests={profileRequests}
           />
         ) : selectedThread ? (
           <>

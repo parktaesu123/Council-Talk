@@ -12,9 +12,12 @@ const dataDir = process.env.DATA_DIR || path.join(__dirname, "data");
 const dataFile = path.join(dataDir, "threads.json");
 const studentsFile = path.join(dataDir, "students.json");
 const tagsFile = path.join(dataDir, "tags.json");
+const profileRequestsFile = path.join(dataDir, "profile-requests.json");
 const staticDir = path.join(__dirname, "dist");
 let operationQueue = Promise.resolve();
 let tagOperationQueue = Promise.resolve();
+let studentOperationQueue = Promise.resolve();
+let profileRequestOperationQueue = Promise.resolve();
 
 app.use(express.json());
 
@@ -51,6 +54,21 @@ const readStudents = async () => {
 const writeStudents = async (students) => {
   await mkdir(dataDir, { recursive: true });
   await writeFile(studentsFile, JSON.stringify(students, null, 2));
+};
+
+const readProfileRequests = async () => {
+  try {
+    const raw = await readFile(profileRequestsFile, "utf8");
+    const requests = JSON.parse(raw);
+    return Array.isArray(requests) ? requests : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeProfileRequests = async (requests) => {
+  await mkdir(dataDir, { recursive: true });
+  await writeFile(profileRequestsFile, JSON.stringify(requests, null, 2));
 };
 
 const readTags = async () => {
@@ -107,7 +125,43 @@ const enqueueTagUpdate = async (operation) => {
   return result;
 };
 
+const enqueueStudentUpdate = async (operation) => {
+  const result = studentOperationQueue.then(async () => {
+    const students = await readStudents();
+    const value = await operation(students);
+    await writeStudents(students);
+    return value;
+  });
+
+  studentOperationQueue = result.catch(() => {});
+  return result;
+};
+
+const enqueueProfileRequestUpdate = async (operation) => {
+  const result = profileRequestOperationQueue.then(async () => {
+    const requests = await readProfileRequests();
+    const value = await operation(requests);
+    await writeProfileRequests(requests);
+    return value;
+  });
+
+  profileRequestOperationQueue = result.catch(() => {});
+  return result;
+};
+
 const normalizeTagName = (name) => String(name || "").trim().slice(0, 24);
+
+const publicStudent = (student) => ({
+  studentId: student.studentId,
+  name: student.name,
+  createdAt: student.createdAt,
+  updatedAt: student.updatedAt,
+});
+
+const listPublicStudents = async () =>
+  Object.values(await readStudents())
+    .map(publicStudent)
+    .sort((a, b) => `${a.studentId}${a.name}`.localeCompare(`${b.studentId}${b.name}`, "ko-KR"));
 
 const resolveStudentByNameAndPin = async ({ name, pin }) => {
   const cleanName = String(name || "").trim();
@@ -267,6 +321,154 @@ app.post("/api/students/signup", async (request, response) => {
   response.status(201).json({ profile, threads: [] });
 });
 
+app.get("/api/students", async (_request, response) => {
+  response.json({ students: await listPublicStudents() });
+});
+
+app.post("/api/students/profile-change", async (request, response) => {
+  const profile = await ensureStudentSession(request.body || {});
+  const nextProfile = normalizeStudent({
+    studentId: request.body?.newStudentId,
+    name: request.body?.newName,
+  });
+
+  if (!profile || !/^\d{4}$/.test(nextProfile.studentId) || !nextProfile.name) {
+    response.status(400).json({ message: "Invalid profile change request" });
+    return;
+  }
+
+  if (profile.studentId === nextProfile.studentId && profile.name === nextProfile.name) {
+    response.status(400).json({ message: "No profile changes requested" });
+    return;
+  }
+
+  const students = await readStudents();
+  const nextKey = studentKey(nextProfile);
+
+  if (students[nextKey]) {
+    response.status(409).json({ message: "Requested profile already exists" });
+    return;
+  }
+
+  const requests = await enqueueProfileRequestUpdate(async (currentRequests) => {
+    const duplicate = currentRequests.find(
+      (item) =>
+        item.status === "대기" &&
+        item.studentId === profile.studentId &&
+        item.name === profile.name,
+    );
+
+    if (duplicate) {
+      duplicate.newStudentId = nextProfile.studentId;
+      duplicate.newName = nextProfile.name;
+      duplicate.updatedAt = new Date().toISOString();
+      return currentRequests;
+    }
+
+    currentRequests.unshift({
+      id: crypto.randomUUID(),
+      studentId: profile.studentId,
+      name: profile.name,
+      newStudentId: nextProfile.studentId,
+      newName: nextProfile.name,
+      status: "대기",
+      createdAt: new Date().toISOString(),
+      updatedAt: new Date().toISOString(),
+    });
+
+    return currentRequests;
+  });
+
+  response.status(201).json({ requests });
+});
+
+app.get("/api/profile-requests", async (_request, response) => {
+  response.json({ requests: await readProfileRequests() });
+});
+
+app.patch("/api/profile-requests/:id", async (request, response) => {
+  const nextStatus = request.body?.status;
+
+  if (!["승인", "거절"].includes(nextStatus)) {
+    response.status(400).json({ message: "Invalid request status" });
+    return;
+  }
+
+  const result = await enqueueProfileRequestUpdate(async (requests) => {
+    const profileRequest = requests.find((item) => item.id === request.params.id);
+
+    if (!profileRequest) {
+      return null;
+    }
+
+    if (profileRequest.status !== "대기") {
+      return { requests, profileRequest, students: await listPublicStudents() };
+    }
+
+    if (nextStatus === "승인") {
+      const students = await readStudents();
+      const oldKey = studentKey(profileRequest);
+      const nextProfile = normalizeStudent({
+        studentId: profileRequest.newStudentId,
+        name: profileRequest.newName,
+      });
+      const nextKey = studentKey(nextProfile);
+      const savedStudent = students[oldKey];
+
+      if (!savedStudent || (students[nextKey] && nextKey !== oldKey)) {
+        return "conflict";
+      }
+
+      delete students[oldKey];
+      students[nextKey] = {
+        ...savedStudent,
+        ...nextProfile,
+        updatedAt: new Date().toISOString(),
+      };
+      await writeStudents(students);
+
+      await enqueueThreadUpdate(async (threads) => {
+        threads.forEach((thread) => {
+          if (thread.studentId === profileRequest.studentId && thread.name === profileRequest.name) {
+            thread.studentId = nextProfile.studentId;
+            thread.name = nextProfile.name;
+            thread.updatedAt = new Date().toISOString();
+            thread.messages.forEach((message) => {
+              if (message.author === "student") {
+                message.authorLabel = nextProfile.name;
+              }
+            });
+          }
+        });
+        return threads;
+      });
+    }
+
+    profileRequest.status = nextStatus;
+    profileRequest.reviewedAt = new Date().toISOString();
+    profileRequest.updatedAt = new Date().toISOString();
+
+    return { requests, profileRequest, students: await listPublicStudents() };
+  });
+
+  if (result === "conflict") {
+    response.status(409).json({ message: "Profile change cannot be approved" });
+    return;
+  }
+
+  if (!result) {
+    response.status(404).json({ message: "Profile request not found" });
+    return;
+  }
+
+  const threads = (await readThreads()).map((thread) => ({
+    ...thread,
+    status: normalizeStatus(thread.status),
+  }));
+
+  response.json({ ...result, threads });
+});
+
 app.post("/api/threads", async (request, response) => {
   const { title, content, tagId } = request.body || {};
   const profile = await ensureStudentSession(request.body || {});
@@ -306,6 +508,48 @@ app.post("/api/threads", async (request, response) => {
       (item) => item.studentId === profile.studentId && item.name === profile.name,
     );
   });
+  response.status(201).json({ thread, threads });
+});
+
+app.post("/api/admin/student-chat", async (request, response) => {
+  const profile = normalizeStudent(request.body || {});
+  const students = await readStudents();
+
+  if (!students[studentKey(profile)]) {
+    response.status(404).json({ message: "Student not found" });
+    return;
+  }
+
+  const now = new Date().toISOString();
+  const authorLabel = String(request.body?.authorLabel || "학생회").trim();
+  const title = String(request.body?.title || "학생회 1:1 대화").trim();
+  const message = String(request.body?.message || "학생회에서 대화를 시작했습니다.").trim();
+  const thread = {
+    id: crypto.randomUUID(),
+    studentId: profile.studentId,
+    name: profile.name,
+    title,
+    tagId: "",
+    tagName: "",
+    status: "진행중",
+    createdAt: now,
+    updatedAt: now,
+    messages: [
+      {
+        id: crypto.randomUUID(),
+        author: "admin",
+        authorLabel,
+        time: timeLabel(),
+        text: message,
+      },
+    ],
+  };
+
+  const threads = await enqueueThreadUpdate(async (currentThreads) => {
+    currentThreads.unshift(thread);
+    return currentThreads;
+  });
+
   response.status(201).json({ thread, threads });
 });
 
