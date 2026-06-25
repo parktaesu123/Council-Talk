@@ -1488,6 +1488,7 @@ textarea:focus {
 }
 
 .tag-admin-page > header,
+.notification-admin-page > header,
 .student-admin-page > header,
 .profile-request-page > header {
   display: flex;
@@ -1499,10 +1500,13 @@ textarea:focus {
 }
 
 .tag-admin-page > header p,
+.notification-admin-page > header p,
 .student-admin-page > header p,
 .profile-request-page > header p,
 .tag-create-card p,
+.notification-create-card p,
 .tag-admin-card p,
+.notification-list article span,
 .request-card p,
 .student-detail-card p {
   margin: 0;
@@ -1510,6 +1514,7 @@ textarea:focus {
 }
 
 .tag-admin-page > header h2,
+.notification-admin-page > header h2,
 .student-admin-page > header h2,
 .profile-request-page > header h2 {
   margin: 5px 0 0;
@@ -1517,6 +1522,7 @@ textarea:focus {
 }
 
 .tag-admin-page > header span,
+.notification-admin-page > header span,
 .student-admin-page > header span,
 .profile-request-page > header span {
   padding: 8px 11px;
@@ -1526,6 +1532,7 @@ textarea:focus {
   font-size: 13px;
 }
 
+.notification-admin-page,
 .student-admin-page,
 .profile-request-page {
   display: flex;
@@ -1535,6 +1542,84 @@ textarea:focus {
   gap: 18px;
   padding: 30px;
   overflow: auto;
+}
+
+.notification-create-card {
+  display: grid;
+  grid-template-columns: 1fr minmax(280px, 460px);
+  gap: 18px;
+  align-items: end;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+
+.notification-create-card strong {
+  display: block;
+  margin-bottom: 7px;
+  font-size: 18px;
+}
+
+.notification-create-card > div:last-child {
+  display: grid;
+  grid-template-columns: 1fr 86px;
+  gap: 8px;
+}
+
+.notification-note {
+  padding: 14px 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: #ffffff;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 700;
+  line-height: 1.55;
+}
+
+.notification-list {
+  display: grid;
+  gap: 10px;
+}
+
+.notification-list article {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 14px;
+  padding: 16px;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: #ffffff;
+}
+
+.notification-list article div {
+  display: grid;
+  min-width: 0;
+  gap: 5px;
+}
+
+.notification-list article strong {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.notification-list article button {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 7px;
+  height: 38px;
+  width: fit-content;
+  padding: 0 12px;
+  border: 1px solid var(--line);
+  border-radius: 7px;
+  background: #ffffff;
+  color: var(--muted);
+  font-size: 13px;
+  font-weight: 800;
 }
 
 .student-detail-card {
@@ -1774,6 +1859,7 @@ textarea:focus {
   }
 
   .tag-create-card,
+  .notification-create-card,
   .student-detail-card {
     grid-template-columns: 1fr;
   }
@@ -1918,6 +2004,7 @@ textarea:focus {
   .admin-messages,
   .status-actions,
   .tag-admin-page,
+  .notification-admin-page,
   .student-admin-page,
   .profile-request-page {
     padding-left: 18px;
@@ -1925,6 +2012,7 @@ textarea:focus {
   }
 
   .tag-admin-page > header,
+  .notification-admin-page > header,
   .student-admin-page > header,
   .profile-request-page > header {
     align-items: flex-start;
@@ -1932,12 +2020,14 @@ textarea:focus {
   }
 
   .tag-admin-page > header h2,
+  .notification-admin-page > header h2,
   .student-admin-page > header h2,
   .profile-request-page > header h2 {
     font-size: 25px;
   }
 
-  .tag-create-card > div:last-child {
+  .tag-create-card > div:last-child,
+  .notification-create-card > div:last-child {
     grid-template-columns: 1fr;
   }
 }

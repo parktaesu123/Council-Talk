@@ -1,6 +1,7 @@
 import express from "express";
 import { createHash } from "node:crypto";
 import { mkdir, readFile, writeFile } from "node:fs/promises";
+import nodemailer from "nodemailer";
 import path from "node:path";
 import { fileURLToPath } from "node:url";
 
@@ -8,16 +9,21 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const app = express();
 const port = Number(process.env.PORT || 3000);
 const adminPassword = process.env.ADMIN_PASSWORD || "counciltalk";
+const adminToken =
+  process.env.ADMIN_TOKEN ||
+  createHash("sha256").update(`council-talk:${adminPassword}`).digest("hex").slice(0, 32);
 const dataDir = process.env.DATA_DIR || path.join(__dirname, "data");
 const dataFile = path.join(dataDir, "threads.json");
 const studentsFile = path.join(dataDir, "students.json");
 const tagsFile = path.join(dataDir, "tags.json");
 const profileRequestsFile = path.join(dataDir, "profile-requests.json");
+const notificationEmailsFile = path.join(dataDir, "notification-emails.json");
 const staticDir = path.join(__dirname, "dist");
 let operationQueue = Promise.resolve();
 let tagOperationQueue = Promise.resolve();
 let studentOperationQueue = Promise.resolve();
 let profileRequestOperationQueue = Promise.resolve();
+let notificationEmailOperationQueue = Promise.resolve();
 
 app.use(express.json());
 
@@ -69,6 +75,21 @@ const readProfileRequests = async () => {
 const writeProfileRequests = async (requests) => {
   await mkdir(dataDir, { recursive: true });
   await writeFile(profileRequestsFile, JSON.stringify(requests, null, 2));
+};
+
+const readNotificationEmails = async () => {
+  try {
+    const raw = await readFile(notificationEmailsFile, "utf8");
+    const emails = JSON.parse(raw);
+    return Array.isArray(emails) ? emails : [];
+  } catch {
+    return [];
+  }
+};
+
+const writeNotificationEmails = async (emails) => {
+  await mkdir(dataDir, { recursive: true });
+  await writeFile(notificationEmailsFile, JSON.stringify(emails, null, 2));
 };
 
 const readTags = async () => {
@@ -149,7 +170,102 @@ const enqueueProfileRequestUpdate = async (operation) => {
   return result;
 };
 
+const enqueueNotificationEmailUpdate = async (operation) => {
+  const result = notificationEmailOperationQueue.then(async () => {
+    const emails = await readNotificationEmails();
+    const value = await operation(emails);
+    await writeNotificationEmails(emails);
+    return value;
+  });
+
+  notificationEmailOperationQueue = result.catch(() => {});
+  return result;
+};
+
 const normalizeTagName = (name) => String(name || "").trim().slice(0, 24);
+const normalizeEmail = (email) => String(email || "").trim().toLowerCase();
+const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email);
+
+const getBaseUrl = (request) =>
+  String(process.env.PUBLIC_BASE_URL || `${request.protocol}://${request.get("host")}`).replace(/\/$/, "");
+
+const getAdminThreadUrl = (thread, request) =>
+  `${getBaseUrl(request)}/admin?token=${encodeURIComponent(adminToken)}&thread=${encodeURIComponent(thread.id)}`;
+
+const escapeHtml = (value) =>
+  String(value)
+    .replace(/&/g, "&amp;")
+    .replace(/</g, "&lt;")
+    .replace(/>/g, "&gt;")
+    .replace(/"/g, "&quot;")
+    .replace(/'/g, "&#039;");
+
+const createTransporter = () => {
+  if (!process.env.SMTP_HOST || !process.env.SMTP_USER || !process.env.SMTP_PASS) {
+    return null;
+  }
+
+  return nodemailer.createTransport({
+    host: process.env.SMTP_HOST,
+    port: Number(process.env.SMTP_PORT || 587),
+    secure: process.env.SMTP_SECURE === "true",
+    auth: {
+      user: process.env.SMTP_USER,
+      pass: process.env.SMTP_PASS,
+    },
+  });
+};
+
+const sendThreadCreatedNotification = async (thread, request) => {
+  const emails = await readNotificationEmails();
+  const recipients = emails.map((item) => item.email).filter(Boolean);
+
+  if (recipients.length === 0) {
+    return;
+  }
+
+  const transporter = createTransporter();
+  const url = getAdminThreadUrl(thread, request);
+
+  if (!transporter) {
+    console.log(`[mail skipped] ${thread.title} -> ${recipients.join(", ")} ${url}`);
+    return;
+  }
+
+  try {
+    const safeTitle = escapeHtml(thread.title);
+    const safeName = escapeHtml(thread.name);
+    const safeStudentId = escapeHtml(thread.studentId);
+    const safeStatus = escapeHtml(normalizeStatus(thread.status));
+    const safeUrl = escapeHtml(url);
+
+    await transporter.sendMail({
+      from: process.env.SMTP_FROM || process.env.SMTP_USER,
+      to: recipients,
+      subject: `[Council Talk] 새 채팅방: ${thread.title}`,
+      text: [
+        "새 채팅방이 개설되었습니다.",
+        "",
+        `제목: ${thread.title}`,
+        `학생: ${thread.name} (${thread.studentId})`,
+        `상태: ${normalizeStatus(thread.status)}`,
+        "",
+        `바로 확인: ${url}`,
+      ].join("\n"),
+      html: `
+        <div style="font-family:Arial,sans-serif;line-height:1.6;color:#202123">
+          <h2>새 채팅방이 개설되었습니다.</h2>
+          <p><strong>제목</strong>: ${safeTitle}</p>
+          <p><strong>학생</strong>: ${safeName} (${safeStudentId})</p>
+          <p><strong>상태</strong>: ${safeStatus}</p>
+          <p><a href="${safeUrl}" style="display:inline-block;padding:10px 14px;background:#171717;color:#fff;text-decoration:none;border-radius:7px">어드민에서 바로 확인</a></p>
+        </div>
+      `,
+    });
+  } catch (error) {
+    console.error("[mail failed]", error.message);
+  }
+};
 
 const publicStudent = (student) => ({
   studentId: student.studentId,
@@ -243,6 +359,49 @@ app.get("/api/threads", async (_request, response) => {
 
 app.get("/api/tags", async (_request, response) => {
   response.json({ tags: await readTags() });
+});
+
+app.get("/api/notification-emails", async (_request, response) => {
+  response.json({ emails: await readNotificationEmails() });
+});
+
+app.post("/api/notification-emails", async (request, response) => {
+  const email = normalizeEmail(request.body?.email);
+
+  if (!isValidEmail(email)) {
+    response.status(400).json({ message: "Invalid email" });
+    return;
+  }
+
+  const emails = await enqueueNotificationEmailUpdate(async (currentEmails) => {
+    const exists = currentEmails.some((item) => item.email === email);
+
+    if (!exists) {
+      currentEmails.push({
+        id: crypto.randomUUID(),
+        email,
+        createdAt: new Date().toISOString(),
+      });
+    }
+
+    return currentEmails;
+  });
+
+  response.status(201).json({ emails });
+});
+
+app.delete("/api/notification-emails/:id", async (request, response) => {
+  const emails = await enqueueNotificationEmailUpdate(async (currentEmails) => {
+    const index = currentEmails.findIndex((email) => email.id === request.params.id);
+
+    if (index >= 0) {
+      currentEmails.splice(index, 1);
+    }
+
+    return currentEmails;
+  });
+
+  response.json({ emails });
 });
 
 app.post("/api/tags", async (request, response) => {
@@ -508,6 +667,7 @@ app.post("/api/threads", async (request, response) => {
       (item) => item.studentId === profile.studentId && item.name === profile.name,
     );
   });
+  await sendThreadCreatedNotification(thread, request);
   response.status(201).json({ thread, threads });
 });
 
@@ -550,6 +710,7 @@ app.post("/api/admin/student-chat", async (request, response) => {
     return currentThreads;
   });
 
+  await sendThreadCreatedNotification(thread, request);
   response.status(201).json({ thread, threads });
 });
 
@@ -770,6 +931,15 @@ app.post("/api/threads/:id/reopen", async (request, response) => {
 app.post("/api/admin/login", (request, response) => {
   if (request.body?.password !== adminPassword) {
     response.status(401).json({ message: "Invalid password" });
+    return;
+  }
+
+  response.json({ ok: true });
+});
+
+app.post("/api/admin/token", (request, response) => {
+  if (request.body?.token !== adminToken) {
+    response.status(401).json({ message: "Invalid admin token" });
     return;
   }
 

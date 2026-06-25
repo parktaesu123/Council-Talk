@@ -86,6 +86,7 @@ function App() {
   const [tags, setTags] = useState([]);
   const [students, setStudents] = useState([]);
   const [profileRequests, setProfileRequests] = useState([]);
+  const [notificationEmails, setNotificationEmails] = useState([]);
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [profileChangeForm, setProfileChangeForm] = useState(emptyProfileChangeForm);
@@ -114,6 +115,10 @@ function App() {
     () => localStorage.getItem("council-talk-admin-name") || "학생회",
   );
   const [selectedThreadId, setSelectedThreadId] = useState(null);
+  const [deepLinkedThreadId, setDeepLinkedThreadId] = useState(() => {
+    const params = new URLSearchParams(window.location.search);
+    return params.get("thread") || "";
+  });
   const [adminReply, setAdminReply] = useState("");
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingText, setEditingText] = useState("");
@@ -124,6 +129,7 @@ function App() {
   const [adminSection, setAdminSection] = useState("inquiries");
   const [selectedStudentKey, setSelectedStudentKey] = useState("");
   const [adminStudentMessage, setAdminStudentMessage] = useState("");
+  const [notificationEmail, setNotificationEmail] = useState("");
   const [tagName, setTagName] = useState("");
   const isAdminRoute = route.startsWith("/admin");
 
@@ -158,6 +164,34 @@ function App() {
     }
 
     loadAdminData();
+  }, [adminAuthed, isAdminRoute]);
+
+  useEffect(() => {
+    if (!isAdminRoute || adminAuthed) {
+      return;
+    }
+
+    const params = new URLSearchParams(window.location.search);
+    const token = params.get("token");
+    const threadId = params.get("thread");
+
+    if (!token) {
+      return;
+    }
+
+    apiRequest("/api/admin/token", {
+      method: "POST",
+      body: JSON.stringify({ token }),
+    })
+      .then(() => {
+        sessionStorage.setItem("council-talk-admin", "true");
+        setAdminAuthed(true);
+        setAdminSection("inquiries");
+        setDeepLinkedThreadId(threadId || "");
+      })
+      .catch(() => {
+        setAdminError("어드민 토큰이 유효하지 않습니다.");
+      });
   }, [adminAuthed, isAdminRoute]);
 
   useEffect(() => {
@@ -267,16 +301,24 @@ function App() {
 
   const loadAdminData = async () => {
     try {
-      const [threadData, tagData, studentData, requestData] = await Promise.all([
+      const [threadData, tagData, studentData, requestData, emailData] = await Promise.all([
         apiRequest("/api/threads"),
         apiRequest("/api/tags"),
         apiRequest("/api/students"),
         apiRequest("/api/profile-requests"),
+        apiRequest("/api/notification-emails"),
       ]);
-      setThreads(threadData.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+      const nextThreads = threadData.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) }));
+      setThreads(nextThreads);
       setTags(normalizeTags(tagData.tags));
       setStudents(studentData.students || []);
       setProfileRequests(requestData.requests || []);
+      setNotificationEmails(emailData.emails || []);
+
+      if (deepLinkedThreadId && nextThreads.some((thread) => thread.id === deepLinkedThreadId)) {
+        setSelectedThreadId(deepLinkedThreadId);
+        setAdminSection("inquiries");
+      }
     } catch {
       setThreads(loadThreads());
     }
@@ -659,6 +701,37 @@ function App() {
     }
   };
 
+  const handleAddNotificationEmail = async (event) => {
+    event.preventDefault();
+    const email = notificationEmail.trim();
+
+    if (!email) {
+      return;
+    }
+
+    try {
+      const data = await apiRequest("/api/notification-emails", {
+        method: "POST",
+        body: JSON.stringify({ email }),
+      });
+      setNotificationEmails(data.emails || []);
+      setNotificationEmail("");
+    } catch {
+      setNotificationEmail("");
+    }
+  };
+
+  const handleDeleteNotificationEmail = async (emailId) => {
+    try {
+      const data = await apiRequest(`/api/notification-emails/${emailId}`, {
+        method: "DELETE",
+      });
+      setNotificationEmails(data.emails || []);
+    } catch {
+      setNotificationEmails((current) => current.filter((email) => email.id !== emailId));
+    }
+  };
+
   const handleProfileRequestReview = async (requestId, status) => {
     try {
       const data = await apiRequest(`/api/profile-requests/${requestId}`, {
@@ -778,6 +851,7 @@ function App() {
           adminSection={adminSection}
           adminTagFilter={adminTagFilter}
           adminStudentMessage={adminStudentMessage}
+          handleAddNotificationEmail={handleAddNotificationEmail}
           handleCreateTag={handleCreateTag}
           handleAdminLogin={handleAdminLogin}
           handleAdminReply={handleAdminReply}
@@ -788,11 +862,14 @@ function App() {
           handleMessageEditCancel={handleMessageEditCancel}
           handleMessageEditStart={handleMessageEditStart}
           handleMessageUpdate={handleMessageUpdate}
+          handleDeleteNotificationEmail={handleDeleteNotificationEmail}
           handleProfileRequestReview={handleProfileRequestReview}
           editingMessageId={editingMessageId}
           editingText={editingText}
           activeMessageMenuId={activeMessageMenuId}
           pendingProfileRequests={pendingProfileRequests}
+          notificationEmail={notificationEmail}
+          notificationEmails={notificationEmails}
           selectedThread={selectedThread}
           selectedThreadId={selectedThreadId}
           selectedStudent={selectedStudent}
@@ -806,6 +883,7 @@ function App() {
           setAdminStudentMessage={setAdminStudentMessage}
           setActiveMessageMenuId={setActiveMessageMenuId}
           setEditingText={setEditingText}
+          setNotificationEmail={setNotificationEmail}
           setSelectedThreadId={setSelectedThreadId}
           setSelectedStudentKey={setSelectedStudentKey}
           setTagName={setTagName}
@@ -1545,6 +1623,64 @@ function ProfileRequestAdminPanel({ handleProfileRequestReview, profileRequests 
   );
 }
 
+function NotificationAdminPanel({
+  handleAddNotificationEmail,
+  handleDeleteNotificationEmail,
+  notificationEmail,
+  notificationEmails,
+  setNotificationEmail,
+}) {
+  return (
+    <div className="notification-admin-page">
+      <header>
+        <div>
+          <p>Email Notifications</p>
+          <h2>채팅방 개설 알림</h2>
+        </div>
+        <span>{notificationEmails.length}개 이메일</span>
+      </header>
+
+      <form className="notification-create-card" onSubmit={handleAddNotificationEmail}>
+        <div>
+          <strong>알림 받을 이메일 등록</strong>
+          <p>새 채팅방이 개설될 때마다 등록된 모든 이메일로 어드민 바로가기 링크가 전송됩니다.</p>
+        </div>
+        <div>
+          <input
+            type="email"
+            value={notificationEmail}
+            onChange={(event) => setNotificationEmail(event.target.value)}
+            placeholder="council@example.com"
+          />
+          <button className="black-button" type="submit">
+            등록
+          </button>
+        </div>
+      </form>
+
+      <section className="notification-note">
+        메일 발송은 서버의 SMTP 설정을 사용합니다. 설정이 없으면 이메일 목록은 저장되지만 발송은 건너뜁니다.
+      </section>
+
+      <section className="notification-list">
+        {notificationEmails.length === 0 && <p className="empty-copy">아직 등록된 이메일이 없습니다.</p>}
+        {notificationEmails.map((item) => (
+          <article key={item.id}>
+            <div>
+              <strong>{item.email}</strong>
+              <span>{item.createdAt ? new Date(item.createdAt).toLocaleDateString("ko-KR") : "등록됨"}</span>
+            </div>
+            <button onClick={() => handleDeleteNotificationEmail(item.id)} type="button">
+              <Trash2 size={15} />
+              삭제
+            </button>
+          </article>
+        ))}
+      </section>
+    </div>
+  );
+}
+
 function MessageBubble({
   actor,
   activeMessageMenuId,
@@ -1650,6 +1786,7 @@ function AdminScreen({
   adminSection,
   adminTagFilter,
   adminStudentMessage,
+  handleAddNotificationEmail,
   handleCreateTag,
   handleAdminLogin,
   handleAdminReply,
@@ -1660,12 +1797,15 @@ function AdminScreen({
   handleMessageEditCancel,
   handleMessageEditStart,
   handleMessageUpdate,
+  handleDeleteNotificationEmail,
   handleProfileRequestReview,
   editingMessageId,
   editingText,
   activeMessageMenuId,
   onRequestDeleteTag,
   pendingProfileRequests,
+  notificationEmail,
+  notificationEmails,
   selectedThread,
   selectedThreadId,
   selectedStudent,
@@ -1679,6 +1819,7 @@ function AdminScreen({
   setAdminStudentMessage,
   setActiveMessageMenuId,
   setEditingText,
+  setNotificationEmail,
   setSelectedThreadId,
   setSelectedStudentKey,
   setTagName,
@@ -1753,6 +1894,13 @@ function AdminScreen({
           >
             변경 신청
             {pendingProfileRequests.length > 0 && <span>{pendingProfileRequests.length}</span>}
+          </button>
+          <button
+            className={adminSection === "notifications" ? "active" : ""}
+            onClick={() => setAdminSection("notifications")}
+            type="button"
+          >
+            알림 설정
           </button>
         </nav>
 
@@ -1893,6 +2041,14 @@ function AdminScreen({
           <ProfileRequestAdminPanel
             handleProfileRequestReview={handleProfileRequestReview}
             profileRequests={profileRequests}
+          />
+        ) : adminSection === "notifications" ? (
+          <NotificationAdminPanel
+            handleAddNotificationEmail={handleAddNotificationEmail}
+            handleDeleteNotificationEmail={handleDeleteNotificationEmail}
+            notificationEmail={notificationEmail}
+            notificationEmails={notificationEmails}
+            setNotificationEmail={setNotificationEmail}
           />
         ) : selectedThread ? (
           <>
