@@ -20,6 +20,14 @@ const FILTERS = [
   { label: "진행중", value: "진행중" },
   { label: "완료", value: "완료" },
 ];
+const ADMIN_SECTIONS = ["inquiries", "tags", "students", "requests", "notifications"];
+const ADMIN_SECTION_PATHS = {
+  inquiries: "/admin/inquiries",
+  tags: "/admin/tags",
+  students: "/admin/students",
+  requests: "/admin/requests",
+  notifications: "/admin/notifications",
+};
 const emptyForm = {
   studentId: "",
   name: "",
@@ -79,6 +87,11 @@ const normalizeStatus = (status) => {
 
 const normalizeTags = (tags) => (Array.isArray(tags) ? tags : []);
 const studentKey = (student) => `${student.studentId}:${student.name}`;
+const getAdminSectionFromPath = (path) => {
+  const section = path.split("/")[2] || "inquiries";
+  return ADMIN_SECTIONS.includes(section) ? section : "inquiries";
+};
+const getPublicViewFromPath = (path) => (path === "/mypage" ? "profile" : "home");
 
 function App() {
   const [route, setRoute] = useState(() => window.location.pathname);
@@ -94,7 +107,7 @@ function App() {
   const [studentEmail, setStudentEmail] = useState("");
   const [studentEmailMessage, setStudentEmailMessage] = useState("");
   const [currentThreadId, setCurrentThreadId] = useState(null);
-  const [publicView, setPublicView] = useState("home");
+  const [publicView, setPublicView] = useState(() => getPublicViewFromPath(window.location.pathname));
   const [authTarget, setAuthTarget] = useState("support");
   const [studentProfile, setStudentProfile] = useState(() => {
     try {
@@ -128,15 +141,40 @@ function App() {
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [adminFilter, setAdminFilter] = useState("all");
   const [adminTagFilter, setAdminTagFilter] = useState("all");
-  const [adminSection, setAdminSection] = useState("inquiries");
+  const [adminSection, setAdminSection] = useState(() => getAdminSectionFromPath(window.location.pathname));
   const [selectedStudentKey, setSelectedStudentKey] = useState("");
   const [adminStudentMessage, setAdminStudentMessage] = useState("");
   const [notificationEmail, setNotificationEmail] = useState("");
   const [tagName, setTagName] = useState("");
   const isAdminRoute = route.startsWith("/admin");
 
+  const syncPageState = (path) => {
+    setRoute(path);
+
+    if (path.startsWith("/admin")) {
+      setAdminSection(getAdminSectionFromPath(path));
+      return;
+    }
+
+    setPublicView(getPublicViewFromPath(path));
+    setIsSupportOpen(path === "/support");
+    if (path === "/support") {
+      setSupportView("rooms");
+      setAuthTarget("support");
+    }
+    if (path === "/mypage") {
+      setAuthTarget("profile");
+    }
+  };
+
+  const navigateTo = (path) => {
+    window.history.pushState({}, "", path);
+    syncPageState(path);
+  };
+
   useEffect(() => {
-    const syncRoute = () => setRoute(window.location.pathname);
+    syncPageState(window.location.pathname);
+    const syncRoute = () => syncPageState(window.location.pathname);
     window.addEventListener("popstate", syncRoute);
     return () => window.removeEventListener("popstate", syncRoute);
   }, []);
@@ -167,6 +205,26 @@ function App() {
 
     loadAdminData();
   }, [adminAuthed, isAdminRoute]);
+
+  useEffect(() => {
+    if (isAdminRoute) {
+      return;
+    }
+
+    if (route === "/mypage" && !studentProfile) {
+      setAuthTarget("profile");
+      setAuthMode("login");
+      setIdentityError("");
+      setIsSupportOpen(true);
+    }
+
+    if (route === "/support") {
+      setAuthTarget("support");
+      setAuthMode("login");
+      setSupportView("rooms");
+      setIsSupportOpen(true);
+    }
+  }, [isAdminRoute, route, studentProfile]);
 
   useEffect(() => {
     if (!isAdminRoute || adminAuthed) {
@@ -289,11 +347,6 @@ function App() {
     counts[key] = (counts[key] || 0) + 1;
     return counts;
   }, {});
-  const goTo = (path) => {
-    window.history.pushState({}, "", path);
-    setRoute(path);
-  };
-
   const saveThreadsFallback = (updater) => {
     setThreads((current) => {
       const next = typeof updater === "function" ? updater(current) : updater;
@@ -338,12 +391,11 @@ function App() {
     setIdentityError("");
     setSupportView("rooms");
     if (authTarget === "profile") {
-      setIsSupportOpen(false);
-      setPublicView("profile");
+      navigateTo("/mypage");
       return;
     }
 
-    setIsSupportOpen(true);
+    navigateTo("/support");
   };
 
   const handleIdentifyStudent = (event) => {
@@ -380,7 +432,7 @@ function App() {
     setAuthMode("login");
     setSupportView("rooms");
     setAuthTarget("support");
-    setIsSupportOpen(true);
+    navigateTo("/support");
   };
 
   const openProfilePage = () => {
@@ -389,12 +441,20 @@ function App() {
     setAuthTarget("profile");
 
     if (!studentProfile) {
-      setIsSupportOpen(true);
+      navigateTo("/mypage");
+      return;
+    }
+
+    navigateTo("/mypage");
+  };
+
+  const closeSupport = () => {
+    if (route === "/support" || (route === "/mypage" && !studentProfile)) {
+      navigateTo("/");
       return;
     }
 
     setIsSupportOpen(false);
-    setPublicView("profile");
   };
 
   const resetStudentProfile = () => {
@@ -406,7 +466,7 @@ function App() {
     setProfileChangeMessage("");
     setStudentEmail("");
     setStudentEmailMessage("");
-    setPublicView("home");
+    navigateTo("/");
     setIdentityError("");
     setAuthMode("login");
     setSupportView("rooms");
@@ -585,6 +645,9 @@ function App() {
       sessionStorage.setItem("council-talk-admin", "true");
       setAdminAuthed(true);
       setAdminPassword("");
+      if (window.location.pathname === "/admin" && !window.location.search) {
+        navigateTo(ADMIN_SECTION_PATHS.inquiries);
+      }
       await loadAdminData();
     } catch {
       setAdminError("비밀번호가 틀렸습니다.");
@@ -798,7 +861,7 @@ function App() {
       });
       setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
       setSelectedThreadId(data.thread.id);
-      setAdminSection("inquiries");
+      navigateTo(ADMIN_SECTION_PATHS.inquiries);
       setAdminStudentMessage("");
     } catch {
       setAdminStudentMessage("");
@@ -903,6 +966,7 @@ function App() {
           pendingProfileRequests={pendingProfileRequests}
           notificationEmail={notificationEmail}
           notificationEmails={notificationEmails}
+          navigateTo={navigateTo}
           selectedThread={selectedThread}
           selectedThreadId={selectedThreadId}
           selectedStudent={selectedStudent}
@@ -949,18 +1013,18 @@ function App() {
   return (
     <main className="public-page">
       <header className="public-header">
-        <button className="public-brand" onClick={() => setPublicView("home")} type="button">
+        <button className="public-brand" onClick={() => navigateTo("/")} type="button">
           <span className="wordmark-symbol" aria-hidden="true">C</span>
           <strong>Council Talk</strong>
         </button>
         <nav aria-label="사용자 메뉴">
-          <button className={publicView === "home" ? "active" : ""} onClick={() => setPublicView("home")} type="button">
+          <button className={route === "/" ? "active" : ""} onClick={() => navigateTo("/")} type="button">
             홈
           </button>
-          <button onClick={openSupport} type="button">
+          <button className={route === "/support" ? "active" : ""} onClick={openSupport} type="button">
             문의하기
           </button>
-          <button className={publicView === "profile" ? "active" : ""} onClick={openProfilePage} type="button">
+          <button className={route === "/mypage" ? "active" : ""} onClick={openProfilePage} type="button">
             마이페이지
           </button>
         </nav>
@@ -1003,7 +1067,7 @@ function App() {
           setAuthMode={setAuthMode}
           setIdentityError={setIdentityError}
           setIdentityForm={setIdentityForm}
-          setIsSupportOpen={setIsSupportOpen}
+          setIsSupportOpen={closeSupport}
         />
       )}
 
@@ -1026,7 +1090,7 @@ function App() {
           setCurrentThreadId={setCurrentThreadId}
           setEditingText={setEditingText}
           setForm={setForm}
-          setIsSupportOpen={setIsSupportOpen}
+          setIsSupportOpen={closeSupport}
           setSupportView={setSupportView}
           setStudentMessage={setStudentMessage}
           studentProfile={studentProfile}
@@ -1872,6 +1936,7 @@ function AdminScreen({
   editingMessageId,
   editingText,
   activeMessageMenuId,
+  navigateTo,
   onRequestDeleteTag,
   pendingProfileRequests,
   notificationEmail,
@@ -1935,28 +2000,28 @@ function AdminScreen({
         <nav className="admin-nav" aria-label="어드민 메뉴">
           <button
             className={adminSection === "inquiries" ? "active" : ""}
-            onClick={() => setAdminSection("inquiries")}
+            onClick={() => navigateTo(ADMIN_SECTION_PATHS.inquiries)}
             type="button"
           >
             문의 관리
           </button>
           <button
             className={adminSection === "tags" ? "active" : ""}
-            onClick={() => setAdminSection("tags")}
+            onClick={() => navigateTo(ADMIN_SECTION_PATHS.tags)}
             type="button"
           >
             태그 관리
           </button>
           <button
             className={adminSection === "students" ? "active" : ""}
-            onClick={() => setAdminSection("students")}
+            onClick={() => navigateTo(ADMIN_SECTION_PATHS.students)}
             type="button"
           >
             학생 관리
           </button>
           <button
             className={adminSection === "requests" ? "active" : ""}
-            onClick={() => setAdminSection("requests")}
+            onClick={() => navigateTo(ADMIN_SECTION_PATHS.requests)}
             type="button"
           >
             변경 신청
@@ -1964,7 +2029,7 @@ function AdminScreen({
           </button>
           <button
             className={adminSection === "notifications" ? "active" : ""}
-            onClick={() => setAdminSection("notifications")}
+            onClick={() => navigateTo(ADMIN_SECTION_PATHS.notifications)}
             type="button"
           >
             알림 설정
