@@ -21,3 +21,11 @@ SMTP_FROM=Council Talk <your-email@gmail.com>
 ```
 
 Gmail을 사용할 경우 일반 계정 비밀번호가 아니라 Google 계정의 앱 비밀번호를 사용해야 합니다.
+
+## Discord notifications
+
+새 문의가 들어왔을 때 디스코드 웹훅으로 학번, 이름, 문의 제목, 어드민 바로가기 링크를 보낼 수 있습니다.
+
+```env
+DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
+```

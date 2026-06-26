@@ -229,6 +229,64 @@ const getMailStatus = () => {
   };
 };
 
+const sendDiscordThreadNotification = async (thread, request) => {
+  const webhookUrl = process.env.DISCORD_WEBHOOK_URL;
+
+  if (!webhookUrl) {
+    console.log(`[discord skipped] ${thread.title}`);
+    return;
+  }
+
+  const url = getAdminThreadUrl(thread, request);
+
+  try {
+    const response = await fetch(webhookUrl, {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        username: "Council Talk",
+        embeds: [
+          {
+            title: "새 문의가 들어왔습니다",
+            description: `**${thread.title}**`,
+            color: 0x171717,
+            fields: [
+              {
+                name: "학생",
+                value: `${thread.name} · ${thread.studentId}`,
+                inline: true,
+              },
+              {
+                name: "상태",
+                value: normalizeStatus(thread.status),
+                inline: true,
+              },
+              {
+                name: "태그",
+                value: thread.tagName || "태그 없음",
+                inline: true,
+              },
+              {
+                name: "바로 확인",
+                value: url,
+              },
+            ],
+            timestamp: new Date().toISOString(),
+          },
+        ],
+      }),
+    });
+
+    if (!response.ok) {
+      console.error("[discord failed]", response.status, await response.text());
+    }
+  } catch (error) {
+    console.error("[discord failed]", error.message);
+  }
+};
+
 const sendThreadCreatedNotification = async (thread, request) => {
   const emails = await readNotificationEmails();
   const recipients = emails.map((item) => item.email).filter(Boolean);
@@ -782,7 +840,10 @@ app.post("/api/threads", async (request, response) => {
       (item) => item.studentId === profile.studentId && item.name === profile.name,
     );
   });
-  await sendThreadCreatedNotification(thread, request);
+  await Promise.all([
+    sendThreadCreatedNotification(thread, request),
+    sendDiscordThreadNotification(thread, request),
+  ]);
   response.status(201).json({ thread, threads });
 });
 

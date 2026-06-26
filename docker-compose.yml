@@ -19,6 +19,7 @@ services:
       SMTP_USER: "${SMTP_USER:-}"
       SMTP_PASS: "${SMTP_PASS:-}"
       SMTP_FROM: "${SMTP_FROM:-}"
+      DISCORD_WEBHOOK_URL: "${DISCORD_WEBHOOK_URL:-}"
     ports:
       - "${APP_HOST:-0.0.0.0}:${APP_PORT:-8792}:3000"
     volumes:
