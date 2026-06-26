@@ -87,10 +87,27 @@ const normalizeStatus = (status) => {
 
 const normalizeTags = (tags) => (Array.isArray(tags) ? tags : []);
 const studentKey = (student) => `${student.studentId}:${student.name}`;
+const decodePathPart = (value) => {
+  try {
+    return decodeURIComponent(value || "");
+  } catch {
+    return value || "";
+  }
+};
 const getAdminSectionFromPath = (path) => {
   const section = path.split("/")[2] || "inquiries";
   return ADMIN_SECTIONS.includes(section) ? section : "inquiries";
 };
+const getAdminThreadIdFromPath = (path) => {
+  const [, , section, threadId] = path.split("/");
+  return section === "inquiries" ? decodePathPart(threadId) : "";
+};
+const getSupportThreadIdFromPath = (path) => {
+  const [, section, threadId] = path.split("/");
+  return section === "support" ? decodePathPart(threadId) : "";
+};
+const getAdminThreadPath = (threadId) => `${ADMIN_SECTION_PATHS.inquiries}/${encodeURIComponent(threadId)}`;
+const getSupportThreadPath = (threadId) => `/support/${encodeURIComponent(threadId)}`;
 const getPublicViewFromPath = (path) => (path === "/mypage" ? "profile" : "home");
 
 function App() {
@@ -133,7 +150,7 @@ function App() {
   const [selectedThreadId, setSelectedThreadId] = useState(null);
   const [deepLinkedThreadId, setDeepLinkedThreadId] = useState(() => {
     const params = new URLSearchParams(window.location.search);
-    return params.get("thread") || "";
+    return getAdminThreadIdFromPath(window.location.pathname) || params.get("thread") || "";
   });
   const [adminReply, setAdminReply] = useState("");
   const [editingMessageId, setEditingMessageId] = useState(null);
@@ -154,14 +171,24 @@ function App() {
 
     if (path.startsWith("/admin")) {
       setAdminSection(getAdminSectionFromPath(path));
+      const threadId = getAdminThreadIdFromPath(path);
+      if (threadId) {
+        setSelectedThreadId(threadId);
+        setDeepLinkedThreadId(threadId);
+      }
       return;
     }
 
     setPublicView(getPublicViewFromPath(path));
-    setIsSupportOpen(path === "/support");
-    if (path === "/support") {
+    const supportThreadId = getSupportThreadIdFromPath(path);
+    setIsSupportOpen(path === "/support" || Boolean(supportThreadId));
+    if (path === "/support" || supportThreadId) {
       setSupportView("rooms");
       setAuthTarget("support");
+      if (supportThreadId) {
+        setCurrentThreadId(supportThreadId);
+        setSupportView("chat");
+      }
     }
     if (path === "/mypage") {
       setAuthTarget("profile");
@@ -219,10 +246,10 @@ function App() {
       setIsSupportOpen(true);
     }
 
-    if (route === "/support") {
+    if (route === "/support" || getSupportThreadIdFromPath(route)) {
       setAuthTarget("support");
       setAuthMode("login");
-      setSupportView("rooms");
+      setSupportView(getSupportThreadIdFromPath(route) ? "chat" : "rooms");
       setIsSupportOpen(true);
     }
   }, [isAdminRoute, route, studentProfile]);
@@ -234,7 +261,7 @@ function App() {
 
     const params = new URLSearchParams(window.location.search);
     const token = params.get("token");
-    const threadId = params.get("thread");
+    const threadId = getAdminThreadIdFromPath(window.location.pathname) || params.get("thread");
 
     if (!token) {
       return;
@@ -275,10 +302,13 @@ function App() {
   }, [studentProfile]);
 
   useEffect(() => {
-    if (!selectedThreadId && threads.length > 0) {
+    if (isAdminRoute && adminSection === "inquiries" && !selectedThreadId && threads.length > 0) {
       setSelectedThreadId(threads[0].id);
+      if (!getAdminThreadIdFromPath(route)) {
+        navigateTo(getAdminThreadPath(threads[0].id));
+      }
     }
-  }, [selectedThreadId, threads]);
+  }, [adminSection, isAdminRoute, route, selectedThreadId, threads]);
 
   useEffect(() => {
     if (!selectedStudentKey && students.length > 0) {
@@ -287,6 +317,15 @@ function App() {
   }, [selectedStudentKey, students]);
 
   useEffect(() => {
+    if (!isAdminRoute || adminSection !== "inquiries") {
+      return;
+    }
+
+    const routeThreadId = getAdminThreadIdFromPath(route);
+    if (routeThreadId) {
+      return;
+    }
+
     const visibleThreads = threads.filter((thread) => {
       const statusMatches = adminFilter === "all" || normalizeStatus(thread.status) === adminFilter;
       const tagMatches =
@@ -298,9 +337,13 @@ function App() {
     const selectedIsVisible = visibleThreads.some((thread) => thread.id === selectedThreadId);
 
     if (!selectedIsVisible) {
-      setSelectedThreadId(visibleThreads[0]?.id || null);
+      const nextThreadId = visibleThreads[0]?.id || null;
+      setSelectedThreadId(nextThreadId);
+      if (nextThreadId) {
+        navigateTo(getAdminThreadPath(nextThreadId));
+      }
     }
-  }, [adminFilter, adminTagFilter, selectedThreadId, threads]);
+  }, [adminFilter, adminSection, adminTagFilter, isAdminRoute, route, selectedThreadId, threads]);
 
   const currentThread = threads.find((thread) => thread.id === currentThreadId);
   const selectedThread = threads.find((thread) => thread.id === selectedThreadId);
@@ -392,12 +435,20 @@ function App() {
       .catch(() => {});
     setForm((current) => ({ ...current, studentId: nextProfile.studentId, name: nextProfile.name }));
     setIdentityError("");
-    setSupportView("rooms");
     if (authTarget === "profile") {
       navigateTo("/mypage");
       return;
     }
 
+    const routeThreadId = getSupportThreadIdFromPath(window.location.pathname);
+    if (routeThreadId && data.threads.some((thread) => thread.id === routeThreadId)) {
+      setCurrentThreadId(routeThreadId);
+      setSupportView("chat");
+      navigateTo(getSupportThreadPath(routeThreadId));
+      return;
+    }
+
+    setSupportView("rooms");
     navigateTo("/support");
   };
 
@@ -452,7 +503,7 @@ function App() {
   };
 
   const closeSupport = () => {
-    if (route === "/support" || (route === "/mypage" && !studentProfile)) {
+    if (route === "/support" || getSupportThreadIdFromPath(route) || (route === "/mypage" && !studentProfile)) {
       navigateTo("/");
       return;
     }
@@ -590,6 +641,7 @@ function App() {
     setCurrentThreadId(thread.id);
     setSelectedThreadId(thread.id);
     setSupportView("chat");
+    navigateTo(getSupportThreadPath(thread.id));
     setForm(emptyForm);
   };
 
@@ -864,7 +916,7 @@ function App() {
       });
       setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
       setSelectedThreadId(data.thread.id);
-      navigateTo(ADMIN_SECTION_PATHS.inquiries);
+      navigateTo(getAdminThreadPath(data.thread.id));
       setAdminStudentMessage("");
     } catch {
       setAdminStudentMessage("");
@@ -1025,7 +1077,7 @@ function App() {
           <button className={route === "/" ? "active" : ""} onClick={() => navigateTo("/")} type="button">
             홈
           </button>
-          <button className={route === "/support" ? "active" : ""} onClick={openSupport} type="button">
+          <button className={route.startsWith("/support") ? "active" : ""} onClick={openSupport} type="button">
             문의하기
           </button>
           <button className={route === "/mypage" ? "active" : ""} onClick={openProfilePage} type="button">
@@ -1089,6 +1141,7 @@ function App() {
           activeMessageMenuId={activeMessageMenuId}
           onRequestReopenThread={confirmReopenThread}
           handleStudentSend={handleStudentSend}
+          navigateTo={navigateTo}
           resetStudentProfile={resetStudentProfile}
           setActiveMessageMenuId={setActiveMessageMenuId}
           setCurrentThreadId={setCurrentThreadId}
@@ -1383,6 +1436,7 @@ function SupportPanel({
   handleMessageEditStart,
   handleMessageUpdate,
   handleStudentSend,
+  navigateTo,
   onRequestReopenThread,
   resetStudentProfile,
   setActiveMessageMenuId,
@@ -1401,6 +1455,7 @@ function SupportPanel({
   const openNewInquiry = () => {
     setCurrentThreadId(null);
     setSupportView("new");
+    navigateTo("/support");
     setForm((current) => ({
       ...current,
       studentId: studentProfile?.studentId || current.studentId,
@@ -1418,7 +1473,11 @@ function SupportPanel({
           <button
             aria-label="문의방 목록으로 돌아가기"
             className="icon-button back-icon-button"
-            onClick={() => setSupportView("rooms")}
+            onClick={() => {
+              setCurrentThreadId(null);
+              setSupportView("rooms");
+              navigateTo("/support");
+            }}
             type="button"
           >
             <ArrowLeft size={22} />
@@ -1454,6 +1513,7 @@ function SupportPanel({
                 onClick={() => {
                   setCurrentThreadId(thread.id);
                   setSupportView("chat");
+                  navigateTo(getSupportThreadPath(thread.id));
                 }}
                 type="button"
               >
@@ -2139,7 +2199,7 @@ function AdminScreen({
                 <button
                   className={thread.id === selectedThreadId ? "thread-item active" : "thread-item"}
                   key={thread.id}
-                  onClick={() => setSelectedThreadId(thread.id)}
+                  onClick={() => navigateTo(getAdminThreadPath(thread.id))}
                   type="button"
                 >
                   <strong>{thread.title}</strong>

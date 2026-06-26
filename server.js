@@ -190,7 +190,7 @@ const getBaseUrl = (request) =>
   String(process.env.PUBLIC_BASE_URL || `${request.protocol}://${request.get("host")}`).replace(/\/$/, "");
 
 const getAdminThreadUrl = (thread, request) =>
-  `${getBaseUrl(request)}/admin?token=${encodeURIComponent(adminToken)}&thread=${encodeURIComponent(thread.id)}`;
+  `${getBaseUrl(request)}/admin/inquiries/${encodeURIComponent(thread.id)}?token=${encodeURIComponent(adminToken)}`;
 
 const escapeHtml = (value) =>
   String(value)
@@ -419,6 +419,23 @@ app.get("/api/threads", async (_request, response) => {
       ...thread,
       status: normalizeStatus(thread.status),
     })),
+  });
+});
+
+app.get("/api/threads/:id", async (request, response) => {
+  const threads = await readThreads();
+  const thread = threads.find((item) => item.id === request.params.id);
+
+  if (!thread) {
+    response.status(404).json({ message: "Thread not found" });
+    return;
+  }
+
+  response.json({
+    thread: {
+      ...thread,
+      status: normalizeStatus(thread.status),
+    },
   });
 });
 
