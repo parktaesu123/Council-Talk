@@ -908,7 +908,12 @@ app.post("/api/threads", async (request, response) => {
   const { title, content, tagId } = request.body || {};
   const profile = await ensureStudentSession(request.body || {});
 
-  if (!profile || !title || !content) {
+  if (!profile) {
+    response.status(401).json({ message: "Invalid student credentials" });
+    return;
+  }
+
+  if (!title || !content) {
     response.status(400).json({ message: "Missing required inquiry fields" });
     return;
   }

@@ -141,6 +141,8 @@ function App() {
   const [authMode, setAuthMode] = useState("login");
   const [supportView, setSupportView] = useState("rooms");
   const [studentMessage, setStudentMessage] = useState("");
+  const [createThreadError, setCreateThreadError] = useState("");
+  const [isCreatingThread, setIsCreatingThread] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
   const [adminError, setAdminError] = useState("");
   const [adminAuthed, setAdminAuthed] = useState(
@@ -680,6 +682,11 @@ function App() {
 
   const handleCreateThread = async (event) => {
     event.preventDefault();
+    if (isCreatingThread) {
+      return;
+    }
+
+    setCreateThreadError("");
     const payload = {
       studentId: studentProfile?.studentId || form.studentId.trim(),
       name: studentProfile?.name || form.name.trim(),
@@ -701,6 +708,7 @@ function App() {
 
     let thread;
     try {
+      setIsCreatingThread(true);
       const data = await apiRequest("/api/threads", {
         method: "POST",
         body: JSON.stringify(payload),
@@ -708,32 +716,23 @@ function App() {
       thread = data.thread;
       setThreads(data.threads.map((item) => ({ ...item, status: normalizeStatus(item.status) })));
     } catch {
-      thread = {
-        id: crypto.randomUUID(),
-        ...payload,
-        tagName: tags.find((tag) => tag.id === payload.tagId)?.name || "",
-        status: "미완료",
-        createdAt: new Date().toISOString(),
-        updatedAt: new Date().toISOString(),
-        messages: [
-          {
-            id: crypto.randomUUID(),
-            author: "student",
-            authorLabel: payload.name,
-            time: getTimeLabel(),
-            text: payload.content,
-          },
-        ],
-      };
-      saveThreadsFallback((current) => [thread, ...current]);
+      setCreateThreadError("문의방을 만들지 못했습니다. 잠시 후 다시 시도해주세요.");
+      setIsCreatingThread(false);
+      return;
     }
 
-    setStudentProfile({ studentId: payload.studentId, name: payload.name, pin: payload.pin });
+    setStudentProfile((current) => ({
+      ...(current || {}),
+      studentId: payload.studentId,
+      name: payload.name,
+      pin: payload.pin,
+    }));
     setCurrentThreadId(thread.id);
     setSelectedThreadId(thread.id);
     setSupportView("chat");
     navigateTo(getSupportThreadPath(thread.id));
     setForm(emptyForm);
+    setIsCreatingThread(false);
   };
 
   const handleStudentSend = async () => {
@@ -1236,6 +1235,7 @@ function App() {
           editingText={editingText}
           form={form}
           handleCreateThread={handleCreateThread}
+          createThreadError={createThreadError}
           handleMessageDelete={handleMessageDelete}
           handleMessageEditCancel={handleMessageEditCancel}
           handleMessageEditStart={handleMessageEditStart}
@@ -1252,6 +1252,7 @@ function App() {
           setIsSupportOpen={closeSupport}
           setSupportView={setSupportView}
           setStudentMessage={setStudentMessage}
+          isCreatingThread={isCreatingThread}
           studentProfile={studentProfile}
           studentThreads={studentThreads}
           studentMessage={studentMessage}
@@ -1601,6 +1602,7 @@ function ConfirmDialog({ confirmLabel, message, onCancel, onConfirm, title }) {
 }
 
 function SupportPanel({
+  createThreadError,
   currentThread,
   editingMessageId,
   editingText,
@@ -1612,6 +1614,7 @@ function SupportPanel({
   handleMessageEditStart,
   handleMessageUpdate,
   handleStudentSend,
+  isCreatingThread,
   navigateTo,
   onRequestReopenThread,
   resetStudentProfile,
@@ -1759,9 +1762,10 @@ function SupportPanel({
             />
           </label>
 
-          <button className="black-button" type="submit">
-            문의 등록
+          <button className="black-button" disabled={isCreatingThread} type="submit">
+            {isCreatingThread ? "문의방 만드는 중..." : "문의 등록"}
           </button>
+          {createThreadError && <p className="form-error">{createThreadError}</p>}
         </form>
       )}
 
