@@ -40,6 +40,7 @@ const emptyIdentity = {
   studentId: "",
   name: "",
   pin: "",
+  email: "",
 };
 
 const emptyProfileChangeForm = {
@@ -87,6 +88,7 @@ const normalizeStatus = (status) => {
 
 const normalizeTags = (tags) => (Array.isArray(tags) ? tags : []);
 const studentKey = (student) => `${student.studentId}:${student.name}`;
+const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
 const decodePathPart = (value) => {
   try {
     return decodeURIComponent(value || "");
@@ -457,15 +459,20 @@ function App() {
     const studentId = identityForm.studentId.trim();
     const name = identityForm.name.trim();
     const pin = identityForm.pin.trim();
+    const email = identityForm.email.trim();
     const isSignup = authMode === "signup";
 
-    if (!name || !/^\d{4}$/.test(pin) || (isSignup && !/^\d{4}$/.test(studentId))) {
-      setIdentityError(isSignup ? "학번, 이름, 4자리 비밀번호를 확인해주세요." : "이름과 4자리 비밀번호를 확인해주세요.");
+    if (!name || !/^\d{4}$/.test(pin) || (isSignup && (!/^\d{4}$/.test(studentId) || !isValidEmail(email)))) {
+      setIdentityError(
+        isSignup
+          ? "학번, 이름, 4자리 비밀번호, 이메일을 확인해주세요."
+          : "이름과 4자리 비밀번호를 확인해주세요.",
+      );
       return;
     }
 
     setIdentityError("");
-    const profile = isSignup ? { studentId, name, pin } : { name, pin };
+    const profile = isSignup ? { studentId, name, pin, email } : { name, pin };
     apiRequest(isSignup ? "/api/students/signup" : "/api/students/session", {
       method: "POST",
       body: JSON.stringify(profile),
@@ -566,6 +573,13 @@ function App() {
       return;
     }
 
+    const nextEmail = studentEmail.trim();
+
+    if (!isValidEmail(nextEmail)) {
+      setStudentEmailMessage("답변 알림을 받을 이메일을 정확히 입력해주세요.");
+      return;
+    }
+
     try {
       const data = await apiRequest("/api/students/email", {
         method: "PATCH",
@@ -573,15 +587,13 @@ function App() {
           studentId: studentProfile.studentId,
           name: studentProfile.name,
           pin: studentProfile.pin,
-          email: studentEmail.trim(),
+          email: nextEmail,
         }),
       });
       const nextProfile = { ...studentProfile, ...data.profile };
       setStudentProfile(nextProfile);
       setStudentEmail(nextProfile.email || "");
-      setStudentEmailMessage(
-        nextProfile.email ? "답변 알림 이메일이 저장되었습니다." : "답변 알림 이메일이 비워졌습니다.",
-      );
+      setStudentEmailMessage("답변 알림 이메일이 저장되었습니다.");
     } catch {
       setStudentEmailMessage("이메일 형식을 확인해주세요.");
     }
@@ -1158,6 +1170,17 @@ function App() {
         />
       )}
 
+      {studentProfile && !studentProfile.email && (
+        <RequiredEmailModal
+          handleStudentEmailUpdate={handleStudentEmailUpdate}
+          resetStudentProfile={resetStudentProfile}
+          setStudentEmail={setStudentEmail}
+          studentEmail={studentEmail}
+          studentEmailMessage={studentEmailMessage}
+          studentProfile={studentProfile}
+        />
+      )}
+
       {confirmDialog && (
         <ConfirmDialog
           confirmLabel={confirmDialog.confirmLabel}
@@ -1262,6 +1285,7 @@ function ProfilePage({
           <label>
             이메일
             <input
+              required
               type="email"
               value={studentEmail}
               onChange={(event) => setStudentEmail(event.target.value)}
@@ -1275,13 +1299,60 @@ function ProfilePage({
             <button className="black-button" type="submit">
               이메일 저장
             </button>
-            <button className="ghost-button" onClick={() => setStudentEmail("")} type="button">
-              비우기
-            </button>
           </div>
         </form>
       </div>
     </section>
+  );
+}
+
+function RequiredEmailModal({
+  handleStudentEmailUpdate,
+  resetStudentProfile,
+  setStudentEmail,
+  studentEmail,
+  studentEmailMessage,
+  studentProfile,
+}) {
+  return (
+    <div className="modal-backdrop required-email-backdrop" role="presentation">
+      <form className="student-auth-modal required-email-modal" onSubmit={handleStudentEmailUpdate}>
+        <header>
+          <div>
+            <span className="mini-logo">C</span>
+            <h2>이메일 등록 안내</h2>
+          </div>
+        </header>
+
+        <p>
+          {studentProfile.name}님, 학생회 답변 알림을 받을 이메일을 등록해주세요.
+          앞으로 문의 답변이 오면 이 이메일로 알림을 보내드립니다.
+        </p>
+
+        <label>
+          이메일
+          <input
+            autoFocus
+            required
+            type="email"
+            value={studentEmail}
+            onChange={(event) => setStudentEmail(event.target.value)}
+            placeholder="student@example.com"
+          />
+        </label>
+
+        {studentEmailMessage && <p className="profile-message">{studentEmailMessage}</p>}
+
+        <div className="auth-actions">
+          <button className="ghost-button" onClick={resetStudentProfile} type="button">
+            로그아웃
+          </button>
+          <button className="black-button" type="submit">
+            이메일 저장
+          </button>
+        </div>
+      </form>
+    </div>
   );
 }
 
@@ -1324,7 +1395,7 @@ function StudentAuthModal({
 
         <p>
           {isSignup
-            ? "처음 이용하는 경우 학번과 비밀번호를 등록해주세요."
+            ? "처음 이용하는 경우 학번, 이메일, 4자리 비밀번호를 등록해주세요."
             : authTarget === "profile"
               ? "이름과 비밀번호를 입력하면 마이페이지로 이동합니다."
               : "이름과 비밀번호만 입력하면 문의방으로 이동합니다."}
@@ -1357,6 +1428,21 @@ function StudentAuthModal({
                 }))
               }
               placeholder="3105"
+            />
+          </label>
+        )}
+
+        {isSignup && (
+          <label className="auth-field-enter">
+            이메일
+            <input
+              required
+              type="email"
+              value={identityForm.email}
+              onChange={(event) =>
+                setIdentityForm((current) => ({ ...current, email: event.target.value }))
+              }
+              placeholder="student@example.com"
             />
           </label>
         )}

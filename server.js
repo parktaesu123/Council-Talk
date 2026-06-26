@@ -418,11 +418,16 @@ const resolveStudentByNameAndPin = async ({ name, pin }) => {
   return saved ? publicStudent(saved) : null;
 };
 
-const ensureStudentSession = async ({ studentId, name, pin }, { createIfMissing = false } = {}) => {
+const ensureStudentSession = async ({ studentId, name, pin, email }, { createIfMissing = false } = {}) => {
   const profile = normalizeStudent({ studentId, name });
   const cleanPin = String(pin || "").trim();
+  const cleanEmail = normalizeEmail(email);
 
   if (!/^\d{4}$/.test(profile.studentId) || !profile.name || !/^\d{4}$/.test(cleanPin)) {
+    return null;
+  }
+
+  if (createIfMissing && !isValidEmail(cleanEmail)) {
     return null;
   }
 
@@ -441,6 +446,7 @@ const ensureStudentSession = async ({ studentId, name, pin }, { createIfMissing 
   if (!saved) {
     students[key] = {
       ...profile,
+      email: cleanEmail,
       pinHash: hashPin(cleanPin),
       createdAt: new Date().toISOString(),
     };
@@ -628,7 +634,7 @@ app.patch("/api/students/email", async (request, response) => {
   const profile = await ensureStudentSession(request.body || {});
   const email = normalizeEmail(request.body?.email);
 
-  if (!profile || (email && !isValidEmail(email))) {
+  if (!profile || !isValidEmail(email)) {
     response.status(400).json({ message: "Invalid student email" });
     return;
   }
