@@ -441,6 +441,8 @@ const publicStudent = (student) => ({
   studentId: student.studentId,
   name: student.name,
   email: student.email || "",
+  banned: Boolean(student.banned),
+  banReason: student.banReason || "",
   createdAt: student.createdAt,
   updatedAt: student.updatedAt,
 });
@@ -913,6 +915,11 @@ app.post("/api/threads", async (request, response) => {
     return;
   }
 
+  if (profile.banned) {
+    response.status(403).json({ message: "banned", reason: profile.banReason });
+    return;
+  }
+
   if (!title || !content) {
     response.status(400).json({ message: "Missing required inquiry fields" });
     return;
@@ -1011,6 +1018,11 @@ app.post("/api/threads/:id/messages", async (request, response) => {
   const profile =
     author === "student" ? await ensureStudentSession(request.body || {}) : null;
 
+  if (author === "student" && profile?.banned) {
+    response.status(403).json({ message: "banned", reason: profile.banReason });
+    return;
+  }
+
   const result = await enqueueThreadUpdate(async (threads) => {
     const thread = threads.find((item) => item.id === request.params.id);
 
@@ -1086,6 +1098,11 @@ app.patch("/api/threads/:id/messages/:messageId", async (request, response) => {
 
   const profile = author === "student" ? await ensureStudentSession(request.body || {}) : null;
 
+  if (author === "student" && profile?.banned) {
+    response.status(403).json({ message: "banned", reason: profile.banReason });
+    return;
+  }
+
   const result = await enqueueThreadUpdate(async (threads) => {
     const thread = threads.find((item) => item.id === request.params.id);
 
@@ -1129,6 +1146,11 @@ app.delete("/api/threads/:id/messages/:messageId", async (request, response) => 
   }
 
   const profile = author === "student" ? await ensureStudentSession(request.body || {}) : null;
+
+  if (author === "student" && profile?.banned) {
+    response.status(403).json({ message: "banned", reason: profile.banReason });
+    return;
+  }
 
   const result = await enqueueThreadUpdate(async (threads) => {
     const thread = threads.find((item) => item.id === request.params.id);
@@ -1241,6 +1263,34 @@ app.post("/api/admin/token", (request, response) => {
   }
 
   response.json({ ok: true });
+});
+
+app.post("/api/admin/students/ban", async (request, response) => {
+  const { studentId, name, banned, reason } = request.body || {};
+  const profile = normalizeStudent({ studentId, name });
+
+  if (!profile.studentId || !profile.name) {
+    response.status(400).json({ message: "Missing student identity" });
+    return;
+  }
+
+  const students = await readStudents();
+  const key = studentKey(profile);
+
+  if (!students[key]) {
+    response.status(404).json({ message: "Student not found" });
+    return;
+  }
+
+  students[key].banned = Boolean(banned);
+  students[key].banReason = banned ? String(reason || "").trim() : "";
+  students[key].bannedAt = banned ? new Date().toISOString() : "";
+  await writeStudents(students);
+
+  response.json({
+    student: publicStudent(students[key]),
+    students: await listPublicStudents(),
+  });
 });
 
 app.use(express.static(staticDir));
