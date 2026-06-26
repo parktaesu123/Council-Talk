@@ -24,6 +24,8 @@ let tagOperationQueue = Promise.resolve();
 let studentOperationQueue = Promise.resolve();
 let profileRequestOperationQueue = Promise.resolve();
 let notificationEmailOperationQueue = Promise.resolve();
+const eventClients = new Set();
+const typingStates = new Map();
 
 app.use(express.json());
 
@@ -46,6 +48,52 @@ const readThreads = async () => {
 const writeThreads = async (threads) => {
   await mkdir(dataDir, { recursive: true });
   await writeFile(dataFile, JSON.stringify(threads, null, 2));
+};
+
+const normalizeThreadForClient = (thread) => ({
+  ...thread,
+  status: normalizeStatus(thread.status),
+});
+
+const sendEvent = (response, event, payload) => {
+  response.write(`event: ${event}\n`);
+  response.write(`data: ${JSON.stringify(payload)}\n\n`);
+};
+
+const broadcastEvent = (event, payload) => {
+  for (const client of eventClients) {
+    sendEvent(client, event, payload);
+  }
+};
+
+const getTypingPayload = () => ({
+  typing: Array.from(typingStates.values()).filter((item) => Date.now() - item.updatedAt < 8000),
+});
+
+const broadcastTyping = () => {
+  broadcastEvent("typing", getTypingPayload());
+};
+
+const publishThreads = async () => {
+  const threads = await readThreads();
+  broadcastEvent("threads", {
+    threads: threads.map(normalizeThreadForClient),
+  });
+};
+
+const clearTypingForThread = (threadId) => {
+  let changed = false;
+
+  for (const [key, item] of typingStates.entries()) {
+    if (item.threadId === threadId) {
+      typingStates.delete(key);
+      changed = true;
+    }
+  }
+
+  if (changed) {
+    broadcastTyping();
+  }
 };
 
 const readStudents = async () => {
@@ -476,13 +524,30 @@ app.get("/healthz", (_request, response) => {
   response.type("text/plain").send("ok\n");
 });
 
+app.get("/api/events", async (request, response) => {
+  response.setHeader("Content-Type", "text/event-stream");
+  response.setHeader("Cache-Control", "no-cache, no-transform");
+  response.setHeader("Connection", "keep-alive");
+  response.flushHeaders?.();
+
+  eventClients.add(response);
+  sendEvent(response, "connected", { ok: true });
+  sendEvent(response, "typing", getTypingPayload());
+
+  const keepAlive = setInterval(() => {
+    response.write(": keep-alive\n\n");
+  }, 25000);
+
+  request.on("close", () => {
+    clearInterval(keepAlive);
+    eventClients.delete(response);
+  });
+});
+
 app.get("/api/threads", async (_request, response) => {
   const threads = await readThreads();
   response.json({
-    threads: threads.map((thread) => ({
-      ...thread,
-      status: normalizeStatus(thread.status),
-    })),
+    threads: threads.map(normalizeThreadForClient),
   });
 });
 
@@ -496,11 +561,43 @@ app.get("/api/threads/:id", async (request, response) => {
   }
 
   response.json({
-    thread: {
-      ...thread,
-      status: normalizeStatus(thread.status),
-    },
+    thread: normalizeThreadForClient(thread),
   });
+});
+
+app.post("/api/threads/:id/typing", async (request, response) => {
+  const clientId = String(request.body?.clientId || "").trim().slice(0, 80);
+  const authorLabel = String(request.body?.authorLabel || "학생회").trim().slice(0, 30);
+  const active = Boolean(request.body?.active);
+
+  if (!clientId) {
+    response.status(400).json({ message: "Missing typing client" });
+    return;
+  }
+
+  const key = `${request.params.id}:${clientId}`;
+
+  if (active) {
+    const updatedAt = Date.now();
+    typingStates.set(key, {
+      threadId: request.params.id,
+      clientId,
+      authorLabel,
+      updatedAt,
+    });
+    setTimeout(() => {
+      const current = typingStates.get(key);
+      if (current?.updatedAt === updatedAt) {
+        typingStates.delete(key);
+        broadcastTyping();
+      }
+    }, 8500);
+  } else {
+    typingStates.delete(key);
+  }
+
+  broadcastTyping();
+  response.json({ ok: true });
 });
 
 app.get("/api/tags", async (_request, response) => {
@@ -850,6 +947,7 @@ app.post("/api/threads", async (request, response) => {
     sendThreadCreatedNotification(thread, request),
     sendDiscordThreadNotification(thread, request),
   ]);
+  await publishThreads();
   response.status(201).json({ thread, threads });
 });
 
@@ -893,6 +991,7 @@ app.post("/api/admin/student-chat", async (request, response) => {
 
   await sendThreadCreatedNotification(thread, request);
   await sendStudentReplyNotification(thread, initialMessage, request);
+  await publishThreads();
   response.status(201).json({ thread, threads });
 });
 
@@ -966,7 +1065,9 @@ app.post("/api/threads/:id/messages", async (request, response) => {
   const { thread, threads, message } = result;
   if (message?.author === "admin") {
     await sendStudentReplyNotification(thread, message, request);
+    clearTypingForThread(thread.id);
   }
+  await publishThreads();
   response.json({ thread, threads });
 });
 
@@ -1010,6 +1111,7 @@ app.patch("/api/threads/:id/messages/:messageId", async (request, response) => {
     return;
   }
 
+  await publishThreads();
   response.json(result);
 });
 
@@ -1052,6 +1154,7 @@ app.delete("/api/threads/:id/messages/:messageId", async (request, response) => 
     return;
   }
 
+  await publishThreads();
   response.json(result);
 });
 
@@ -1075,6 +1178,7 @@ app.patch("/api/threads/:id/status", async (request, response) => {
   }
 
   const { thread, threads } = result;
+  await publishThreads();
   response.json({ thread, threads });
 });
 
@@ -1112,6 +1216,7 @@ app.post("/api/threads/:id/reopen", async (request, response) => {
     return;
   }
 
+  await publishThreads();
   response.json(result);
 });
 

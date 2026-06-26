@@ -543,6 +543,19 @@ textarea:focus {
   }
 }
 
+@keyframes typing-pulse {
+  0%,
+  100% {
+    opacity: 0.45;
+    transform: scale(0.86);
+  }
+
+  50% {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
 .support-header {
   display: flex;
   align-items: center;
@@ -1436,6 +1449,25 @@ textarea:focus {
   background: #f4f4f4;
 }
 
+.thread-item.typing {
+  border-left: 4px solid #d59d22;
+  background: #fff8e9;
+}
+
+.thread-item.recent-admin:not(.typing) {
+  border-left: 4px solid #171717;
+}
+
+.thread-item.typing small {
+  color: #9a6900;
+  font-weight: 800;
+}
+
+.thread-item.recent-admin:not(.typing) small {
+  color: var(--ink);
+  font-weight: 800;
+}
+
 .thread-item strong {
   overflow: hidden;
   font-size: 15px;
@@ -1507,6 +1539,29 @@ textarea:focus {
   border-color: var(--black);
   background: var(--black);
   color: #ffffff;
+}
+
+.typing-presence {
+  display: inline-flex;
+  align-items: center;
+  gap: 9px;
+  margin: 14px 30px 0;
+  padding: 10px 13px;
+  width: fit-content;
+  border: 1px solid #ead8b8;
+  border-radius: 999px;
+  background: #fff8e9;
+  color: #7a5400;
+  font-size: 13px;
+  font-weight: 800;
+}
+
+.typing-presence span {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #d59d22;
+  animation: typing-pulse 900ms ease-in-out infinite;
 }
 
 .admin-messages {

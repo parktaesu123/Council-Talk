@@ -10,7 +10,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 
 const STORAGE_KEY = "council-talk-threads";
 const STATUS_LABELS = ["미완료", "진행중", "완료"];
@@ -149,6 +149,9 @@ function App() {
   const [adminName, setAdminName] = useState(
     () => localStorage.getItem("council-talk-admin-name") || "학생회",
   );
+  const adminClientIdRef = useRef(
+    sessionStorage.getItem("council-talk-admin-client-id") || crypto.randomUUID(),
+  );
   const [selectedThreadId, setSelectedThreadId] = useState(null);
   const [deepLinkedThreadId, setDeepLinkedThreadId] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -161,6 +164,7 @@ function App() {
   const [confirmDialog, setConfirmDialog] = useState(null);
   const [adminFilter, setAdminFilter] = useState("all");
   const [adminTagFilter, setAdminTagFilter] = useState("all");
+  const [adminTyping, setAdminTyping] = useState([]);
   const [adminSection, setAdminSection] = useState(() => getAdminSectionFromPath(window.location.pathname));
   const [selectedStudentKey, setSelectedStudentKey] = useState("");
   const [adminStudentMessage, setAdminStudentMessage] = useState("");
@@ -229,12 +233,83 @@ function App() {
   }, [isAdminRoute, studentProfile]);
 
   useEffect(() => {
+    sessionStorage.setItem("council-talk-admin-client-id", adminClientIdRef.current);
+  }, []);
+
+  useEffect(() => {
     if (!adminAuthed || !isAdminRoute) {
       return;
     }
 
     loadAdminData();
   }, [adminAuthed, isAdminRoute]);
+
+  useEffect(() => {
+    if (!adminAuthed || !isAdminRoute) {
+      return undefined;
+    }
+
+    const events = new EventSource("/api/events");
+
+    events.addEventListener("threads", (event) => {
+      const data = JSON.parse(event.data);
+      setThreads((data.threads || []).map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+    });
+
+    events.addEventListener("typing", (event) => {
+      const data = JSON.parse(event.data);
+      setAdminTyping(
+        (data.typing || []).filter((item) => item.clientId !== adminClientIdRef.current),
+      );
+    });
+
+    events.onerror = () => {
+      setTimeout(() => loadAdminData(), 1000);
+    };
+
+    return () => events.close();
+  }, [adminAuthed, isAdminRoute]);
+
+  useEffect(() => {
+    if (!adminAuthed || !isAdminRoute || !selectedThreadId) {
+      return undefined;
+    }
+
+    const threadId = selectedThreadId;
+    const active = Boolean(adminReply.trim());
+    const timeout = setTimeout(() => {
+      fetch(`/api/threads/${threadId}/typing`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          active,
+          authorLabel: adminName.trim() || "학생회",
+          clientId: adminClientIdRef.current,
+        }),
+      }).catch(() => {});
+    }, active ? 220 : 0);
+
+    return () => clearTimeout(timeout);
+  }, [adminAuthed, adminName, adminReply, isAdminRoute, selectedThreadId]);
+
+  useEffect(() => {
+    if (!adminAuthed || !isAdminRoute || !selectedThreadId) {
+      return undefined;
+    }
+
+    const threadId = selectedThreadId;
+    return () => {
+      fetch(`/api/threads/${threadId}/typing`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          active: false,
+          authorLabel: adminName.trim() || "학생회",
+          clientId: adminClientIdRef.current,
+        }),
+      }).catch(() => {});
+    };
+  }, [adminAuthed, adminName, isAdminRoute, selectedThreadId]);
 
   useEffect(() => {
     if (isAdminRoute) {
@@ -365,6 +440,10 @@ function App() {
 
       return statusMatches && tagMatches;
     });
+  const typingThreadIds = new Set(adminTyping.map((item) => item.threadId));
+  const selectedThreadTyping = selectedThread
+    ? adminTyping.filter((item) => item.threadId === selectedThread.id)
+    : [];
   const statusCounts = threads.reduce(
     (counts, thread) => {
       counts.all += 1;
@@ -736,6 +815,15 @@ function App() {
         body: JSON.stringify({ author: "admin", authorLabel, text }),
       });
       setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+      fetch(`/api/threads/${selectedThread.id}/typing`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          active: false,
+          authorLabel,
+          clientId: adminClientIdRef.current,
+        }),
+      }).catch(() => {});
     } catch {
       saveThreadsFallback((current) =>
         current.map((thread) =>
@@ -1035,6 +1123,7 @@ function App() {
           notificationEmail={notificationEmail}
           notificationEmails={notificationEmails}
           navigateTo={navigateTo}
+          selectedThreadTyping={selectedThreadTyping}
           selectedThread={selectedThread}
           selectedThreadId={selectedThreadId}
           selectedStudent={selectedStudent}
@@ -1061,6 +1150,7 @@ function App() {
           onRequestDeleteTag={confirmTagDelete}
           profileRequests={profileRequests}
           threads={filteredAdminThreads}
+          typingThreadIds={typingThreadIds}
         />
         {confirmDialog && (
           <ConfirmDialog
@@ -2098,6 +2188,7 @@ function AdminScreen({
   notificationEmail,
   notificationEmails,
   mailStatus,
+  selectedThreadTyping,
   selectedThread,
   selectedThreadId,
   selectedStudent,
@@ -2123,6 +2214,7 @@ function AdminScreen({
   tags,
   profileRequests,
   threads,
+  typingThreadIds,
 }) {
   if (!adminAuthed) {
     return (
@@ -2283,7 +2375,14 @@ function AdminScreen({
               {threads.length === 0 && <p className="empty-copy">조건에 맞는 문의가 없습니다.</p>}
               {threads.map((thread) => (
                 <button
-                  className={thread.id === selectedThreadId ? "thread-item active" : "thread-item"}
+                  className={[
+                    "thread-item",
+                    thread.id === selectedThreadId ? "active" : "",
+                    typingThreadIds.has(thread.id) ? "typing" : "",
+                    thread.messages.at(-1)?.author === "admin" ? "recent-admin" : "",
+                  ]
+                    .filter(Boolean)
+                    .join(" ")}
                   key={thread.id}
                   onClick={() => navigateTo(getAdminThreadPath(thread.id))}
                   type="button"
@@ -2293,7 +2392,13 @@ function AdminScreen({
                     {thread.name} · {thread.studentId}
                   </span>
                   {thread.tagName && <em>{thread.tagName}</em>}
-                  <small>{normalizeStatus(thread.status)}</small>
+                  <small>
+                    {typingThreadIds.has(thread.id)
+                      ? "답변 작성 중"
+                      : thread.messages.at(-1)?.author === "admin"
+                        ? "최근 답변됨"
+                        : normalizeStatus(thread.status)}
+                  </small>
                 </button>
               ))}
             </div>
@@ -2404,6 +2509,13 @@ function AdminScreen({
                 </button>
               ))}
             </div>
+
+            {selectedThreadTyping.length > 0 && (
+              <div className="typing-presence">
+                <span />
+                {selectedThreadTyping.map((item) => item.authorLabel).join(", ")}님이 답변을 작성 중입니다.
+              </div>
+            )}
 
             <div className="messages admin-messages">
               {selectedThread.messages.map((message) => (
