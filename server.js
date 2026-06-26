@@ -216,6 +216,19 @@ const createTransporter = () => {
   });
 };
 
+const getMailStatus = () => {
+  const requiredKeys = ["SMTP_HOST", "SMTP_USER", "SMTP_PASS"];
+  const missing = requiredKeys.filter((key) => !process.env[key]);
+
+  return {
+    configured: missing.length === 0,
+    missing,
+    host: process.env.SMTP_HOST || "",
+    user: process.env.SMTP_USER || "",
+    from: process.env.SMTP_FROM || process.env.SMTP_USER || "",
+  };
+};
+
 const sendThreadCreatedNotification = async (thread, request) => {
   const emails = await readNotificationEmails();
   const recipients = emails.map((item) => item.email).filter(Boolean);
@@ -415,6 +428,10 @@ app.get("/api/tags", async (_request, response) => {
 
 app.get("/api/notification-emails", async (_request, response) => {
   response.json({ emails: await readNotificationEmails() });
+});
+
+app.get("/api/mail-status", (_request, response) => {
+  response.json(getMailStatus());
 });
 
 app.post("/api/notification-emails", async (request, response) => {

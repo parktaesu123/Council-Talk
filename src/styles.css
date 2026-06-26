@@ -1633,6 +1633,8 @@ textarea:focus {
 }
 
 .notification-note {
+  display: grid;
+  gap: 4px;
   padding: 14px 16px;
   border: 1px solid var(--line-soft);
   border-radius: 10px;
@@ -1641,6 +1643,21 @@ textarea:focus {
   font-size: 13px;
   font-weight: 700;
   line-height: 1.55;
+}
+
+.notification-note strong {
+  color: var(--ink);
+  font-size: 15px;
+}
+
+.notification-note.ready {
+  border-color: #cfe7d8;
+  background: #f5fbf7;
+}
+
+.notification-note.warning {
+  border-color: #ead8b8;
+  background: #fffaf1;
 }
 
 .notification-list {

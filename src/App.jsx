@@ -100,6 +100,7 @@ function App() {
   const [students, setStudents] = useState([]);
   const [profileRequests, setProfileRequests] = useState([]);
   const [notificationEmails, setNotificationEmails] = useState([]);
+  const [mailStatus, setMailStatus] = useState({ configured: false, missing: [] });
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [profileChangeForm, setProfileChangeForm] = useState(emptyProfileChangeForm);
@@ -357,12 +358,13 @@ function App() {
 
   const loadAdminData = async () => {
     try {
-      const [threadData, tagData, studentData, requestData, emailData] = await Promise.all([
+      const [threadData, tagData, studentData, requestData, emailData, mailData] = await Promise.all([
         apiRequest("/api/threads"),
         apiRequest("/api/tags"),
         apiRequest("/api/students"),
         apiRequest("/api/profile-requests"),
         apiRequest("/api/notification-emails"),
+        apiRequest("/api/mail-status"),
       ]);
       const nextThreads = threadData.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) }));
       setThreads(nextThreads);
@@ -370,6 +372,7 @@ function App() {
       setStudents(studentData.students || []);
       setProfileRequests(requestData.requests || []);
       setNotificationEmails(emailData.emails || []);
+      setMailStatus(mailData || { configured: false, missing: [] });
 
       if (deepLinkedThreadId && nextThreads.some((thread) => thread.id === deepLinkedThreadId)) {
         setSelectedThreadId(deepLinkedThreadId);
@@ -964,6 +967,7 @@ function App() {
           editingText={editingText}
           activeMessageMenuId={activeMessageMenuId}
           pendingProfileRequests={pendingProfileRequests}
+          mailStatus={mailStatus}
           notificationEmail={notificationEmail}
           notificationEmails={notificationEmails}
           navigateTo={navigateTo}
@@ -1760,6 +1764,7 @@ function ProfileRequestAdminPanel({ handleProfileRequestReview, profileRequests 
 function NotificationAdminPanel({
   handleAddNotificationEmail,
   handleDeleteNotificationEmail,
+  mailStatus,
   notificationEmail,
   notificationEmails,
   setNotificationEmail,
@@ -1792,8 +1797,13 @@ function NotificationAdminPanel({
         </div>
       </form>
 
-      <section className="notification-note">
-        메일 발송은 서버의 SMTP 설정을 사용합니다. 설정이 없으면 이메일 목록은 저장되지만 발송은 건너뜁니다.
+      <section className={mailStatus.configured ? "notification-note ready" : "notification-note warning"}>
+        <strong>{mailStatus.configured ? "메일 발송 준비됨" : "SMTP 설정 필요"}</strong>
+        <span>
+          {mailStatus.configured
+            ? `${mailStatus.from || mailStatus.user} 계정으로 새 채팅방 알림을 발송합니다.`
+            : `이메일은 저장됐지만 ${mailStatus.missing?.join(", ") || "SMTP 설정"} 값이 없어 발송이 건너뜁니다.`}
+        </span>
       </section>
 
       <section className="notification-list">
@@ -1941,6 +1951,7 @@ function AdminScreen({
   pendingProfileRequests,
   notificationEmail,
   notificationEmails,
+  mailStatus,
   selectedThread,
   selectedThreadId,
   selectedStudent,
@@ -2217,6 +2228,7 @@ function AdminScreen({
           <NotificationAdminPanel
             handleAddNotificationEmail={handleAddNotificationEmail}
             handleDeleteNotificationEmail={handleDeleteNotificationEmail}
+            mailStatus={mailStatus}
             notificationEmail={notificationEmail}
             notificationEmails={notificationEmails}
             setNotificationEmail={setNotificationEmail}

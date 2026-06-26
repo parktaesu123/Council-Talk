@@ -10,7 +10,15 @@ services:
       NODE_ENV: production
       PORT: "3000"
       ADMIN_PASSWORD: "${ADMIN_PASSWORD:-counciltalk}"
+      ADMIN_TOKEN: "${ADMIN_TOKEN:-}"
       DATA_DIR: /app/data
+      PUBLIC_BASE_URL: "${PUBLIC_BASE_URL:-}"
+      SMTP_HOST: "${SMTP_HOST:-}"
+      SMTP_PORT: "${SMTP_PORT:-587}"
+      SMTP_SECURE: "${SMTP_SECURE:-false}"
+      SMTP_USER: "${SMTP_USER:-}"
+      SMTP_PASS: "${SMTP_PASS:-}"
+      SMTP_FROM: "${SMTP_FROM:-}"
     ports:
       - "${APP_HOST:-0.0.0.0}:${APP_PORT:-8792}:3000"
     volumes:
