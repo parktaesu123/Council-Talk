@@ -164,6 +164,7 @@ function App() {
   const [editingText, setEditingText] = useState("");
   const [activeMessageMenuId, setActiveMessageMenuId] = useState(null);
   const [confirmDialog, setConfirmDialog] = useState(null);
+  const [banDialogStudent, setBanDialogStudent] = useState(null);
   const [adminFilter, setAdminFilter] = useState("all");
   const [adminTagFilter, setAdminTagFilter] = useState("all");
   const [adminTyping, setAdminTyping] = useState([]);
@@ -1064,6 +1065,29 @@ function App() {
 
   const closeConfirmDialog = () => setConfirmDialog(null);
 
+  const openBanDialog = (student) => {
+    setBanReason("");
+    setBanDialogStudent(student);
+  };
+
+  const closeBanDialog = () => setBanDialogStudent(null);
+
+  const confirmBan = () => {
+    if (banDialogStudent) {
+      handleToggleBan(banDialogStudent, true);
+    }
+    setBanDialogStudent(null);
+  };
+
+  const confirmUnban = (student) => {
+    openConfirmDialog({
+      title: "차단 해제",
+      message: `${student.name} 학생의 차단을 해제하시겠습니까?`,
+      confirmLabel: "차단 해제",
+      onConfirm: () => handleToggleBan(student, false),
+    });
+  };
+
   const confirmTagDelete = (tag) => {
     openConfirmDialog({
       title: "태그 삭제",
@@ -1143,9 +1167,8 @@ function App() {
           handleAdminReply={handleAdminReply}
           handleAdminStatusChange={handleAdminStatusChange}
           handleCreateStudentChat={handleCreateStudentChat}
-          handleToggleBan={handleToggleBan}
-          banReason={banReason}
-          setBanReason={setBanReason}
+          onOpenBanDialog={openBanDialog}
+          onUnban={confirmUnban}
           handleDeleteTag={handleDeleteTag}
           handleMessageDelete={handleMessageDelete}
           handleMessageEditCancel={handleMessageEditCancel}
@@ -1200,6 +1223,15 @@ function App() {
               closeConfirmDialog();
             }}
             title={confirmDialog.title}
+          />
+        )}
+        {banDialogStudent && (
+          <BanDialog
+            student={banDialogStudent}
+            reason={banReason}
+            setReason={setBanReason}
+            onCancel={closeBanDialog}
+            onConfirm={confirmBan}
           />
         )}
       </>
@@ -1640,6 +1672,37 @@ function ConfirmDialog({ confirmLabel, message, onCancel, onConfirm, title }) {
   );
 }
 
+function BanDialog({ student, reason, setReason, onCancel, onConfirm }) {
+  return (
+    <div className="modal-backdrop confirm-backdrop" role="presentation">
+      <section className="confirm-dialog" role="dialog" aria-modal="true" aria-label="학생 차단">
+        <h2>학생을 차단할까요?</h2>
+        <p>
+          {student.name} ({student.studentId}) 학생을 차단하면 새 문의 작성과 메시지 전송이
+          제한됩니다. 기존 문의 내용은 계속 볼 수 있습니다.
+        </p>
+        <label className="ban-dialog-reason">
+          차단 사유
+          <textarea
+            value={reason}
+            onChange={(event) => setReason(event.target.value)}
+            placeholder="차단 사유를 입력하세요 (학생에게 표시됩니다)"
+            rows={3}
+          />
+        </label>
+        <div>
+          <button className="ghost-button" onClick={onCancel} type="button">
+            취소
+          </button>
+          <button className="danger-button" onClick={onConfirm} type="button">
+            차단하기
+          </button>
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function SupportPanel({
   createThreadError,
   currentThread,
@@ -1961,9 +2024,8 @@ function StudentAdminPanel({
   adminName,
   adminStudentMessage,
   handleCreateStudentChat,
-  handleToggleBan,
-  banReason,
-  setBanReason,
+  onOpenBanDialog,
+  onUnban,
   selectedStudent,
   setAdminStudentMessage,
   studentThreadCount,
@@ -1981,47 +2043,36 @@ function StudentAdminPanel({
 
       {selectedStudent ? (
         <section className="student-detail-card">
-          <div>
-            <span>선택한 학생</span>
-            <h3>
-              {selectedStudent.name}
-              {selectedStudent.banned && <em className="ban-badge">차단됨</em>}
-            </h3>
-            <p>{selectedStudent.studentId} · {studentThreadCount}개 대화</p>
-          </div>
-
-          <div className="student-ban-controls">
-            {selectedStudent.banned ? (
-              <>
+          <div className="student-detail-head">
+            <div>
+              <span>선택한 학생</span>
+              <h3>
+                {selectedStudent.name}
+                {selectedStudent.banned && <em className="ban-badge">차단됨</em>}
+              </h3>
+              <p>{selectedStudent.studentId} · {studentThreadCount}개 대화</p>
+              {selectedStudent.banned && (
                 <p className="ban-current-reason">
                   차단 사유: {selectedStudent.banReason || "사유 없음"}
                 </p>
-                <button
-                  className="ghost-button"
-                  onClick={() => handleToggleBan(selectedStudent, false)}
-                  type="button"
-                >
-                  차단 해제
-                </button>
-              </>
+              )}
+            </div>
+            {selectedStudent.banned ? (
+              <button
+                className="text-ban-button"
+                onClick={() => onUnban(selectedStudent)}
+                type="button"
+              >
+                차단 해제
+              </button>
             ) : (
-              <>
-                <label>
-                  차단 사유
-                  <input
-                    value={banReason}
-                    onChange={(event) => setBanReason(event.target.value)}
-                    placeholder="차단 사유를 입력하세요 (학생에게 표시됩니다)"
-                  />
-                </label>
-                <button
-                  className="danger-button"
-                  onClick={() => handleToggleBan(selectedStudent, true)}
-                  type="button"
-                >
-                  차단하기
-                </button>
-              </>
+              <button
+                className="text-ban-button danger"
+                onClick={() => onOpenBanDialog(selectedStudent)}
+                type="button"
+              >
+                차단하기
+              </button>
             )}
           </div>
 
@@ -2275,9 +2326,8 @@ function AdminScreen({
   handleAdminReply,
   handleAdminStatusChange,
   handleCreateStudentChat,
-  handleToggleBan,
-  banReason,
-  setBanReason,
+  onOpenBanDialog,
+  onUnban,
   handleDeleteTag,
   handleMessageDelete,
   handleMessageEditCancel,
@@ -2574,9 +2624,8 @@ function AdminScreen({
             adminName={adminName}
             adminStudentMessage={adminStudentMessage}
             handleCreateStudentChat={handleCreateStudentChat}
-            handleToggleBan={handleToggleBan}
-            banReason={banReason}
-            setBanReason={setBanReason}
+            onOpenBanDialog={onOpenBanDialog}
+            onUnban={onUnban}
             selectedStudent={selectedStudent}
             setAdminStudentMessage={setAdminStudentMessage}
             studentThreadCount={selectedStudent ? studentThreadCounts[studentKey(selectedStudent)] || 0 : 0}
