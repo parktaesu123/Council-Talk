@@ -1633,8 +1633,10 @@ function SupportPanel({
 }) {
   const openNewInquiry = () => {
     setCurrentThreadId(null);
+    // Do NOT navigate to "/support" here. The panel is already open on this view,
+    // and changing the route would re-trigger the route-sync effect that forces
+    // supportView back to "rooms", preventing the new-inquiry form from opening.
     setSupportView("new");
-    navigateTo("/support");
     setForm((current) => ({
       ...current,
       studentId: studentProfile?.studentId || current.studentId,
