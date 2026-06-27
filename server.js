@@ -55,6 +55,25 @@ const normalizeThreadForClient = (thread) => ({
   ...thread,
   status: normalizeStatus(thread.status),
 });
+const normalizeReplyTarget = (value) => {
+  if (!value || typeof value !== "object") {
+    return null;
+  }
+
+  const id = String(value.id || "").trim();
+  const authorLabel = String(value.authorLabel || "").trim();
+  const text = String(value.text || "").trim();
+
+  if (!id || !authorLabel || !text) {
+    return null;
+  }
+
+  return {
+    id,
+    authorLabel,
+    text,
+  };
+};
 
 const sendEvent = (response, event, payload) => {
   eventSequence += 1;
@@ -1040,6 +1059,7 @@ app.post("/api/threads/:id/messages", async (request, response) => {
   const { author, authorLabel, text } = request.body || {};
   const normalizedText = String(text || "").trim();
   const clientMessageId = normalizeClientMessageId(request.body?.clientMessageId);
+  const replyTo = normalizeReplyTarget(request.body?.replyTo);
 
   if (!normalizedText || !["student", "admin"].includes(author)) {
     response.status(400).json({ message: "Invalid message" });
@@ -1104,6 +1124,7 @@ app.post("/api/threads/:id/messages", async (request, response) => {
       createdAt: new Date().toISOString(),
       time: timeLabel(),
       text: normalizedText,
+      ...(replyTo ? { replyTo } : {}),
     };
     thread.messages.push(message);
 

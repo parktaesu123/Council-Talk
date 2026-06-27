@@ -5,6 +5,7 @@ import {
   MessageCircle,
   Pencil,
   Plus,
+  Reply,
   Send,
   Trash2,
   UserRound,
@@ -90,6 +91,11 @@ const normalizeTags = (tags) => (Array.isArray(tags) ? tags : []);
 const normalizeThread = (thread) => ({ ...thread, status: normalizeStatus(thread.status) });
 const normalizeThreads = (threads) => (Array.isArray(threads) ? threads.map(normalizeThread) : []);
 const messageSignature = (threadId, text) => `${threadId}:${String(text || "").trim()}`;
+const createReplyTarget = (message) => ({
+  id: message.id,
+  authorLabel: message.authorLabel,
+  text: String(message.text || ""),
+});
 const mergeThreadList = (threads, nextThread) => {
   const normalized = normalizeThread(nextThread);
   const index = threads.findIndex((thread) => thread.id === normalized.id);
@@ -156,6 +162,7 @@ function App() {
   const [authMode, setAuthMode] = useState("login");
   const [supportView, setSupportView] = useState("rooms");
   const [studentMessage, setStudentMessage] = useState("");
+  const [studentReplyTarget, setStudentReplyTarget] = useState(null);
   const [createThreadError, setCreateThreadError] = useState("");
   const [isCreatingThread, setIsCreatingThread] = useState(false);
   const [adminPassword, setAdminPassword] = useState("");
@@ -182,6 +189,7 @@ function App() {
     return getAdminThreadIdFromPath(window.location.pathname) || params.get("thread") || "";
   });
   const [adminReply, setAdminReply] = useState("");
+  const [adminReplyTarget, setAdminReplyTarget] = useState(null);
   const [editingMessageId, setEditingMessageId] = useState(null);
   const [editingText, setEditingText] = useState("");
   const [activeMessageMenuId, setActiveMessageMenuId] = useState(null);
@@ -199,6 +207,8 @@ function App() {
   const [tagName, setTagName] = useState("");
   const isAdminRoute = route.startsWith("/admin");
   const adminReplyHasText = Boolean(adminReply.trim());
+  const studentComposeRef = useRef(null);
+  const adminComposeRef = useRef(null);
 
   const syncPageState = (path) => {
     setRoute(path);
@@ -535,6 +545,19 @@ function App() {
   const selectedThreadTyping = selectedThread
     ? adminTyping.filter((item) => item.threadId === selectedThread.id)
     : [];
+  
+  useEffect(() => {
+    if (studentReplyTarget && !currentThread?.messages.some((message) => message.id === studentReplyTarget.id)) {
+      setStudentReplyTarget(null);
+    }
+  }, [currentThread, studentReplyTarget]);
+
+  useEffect(() => {
+    if (adminReplyTarget && !selectedThread?.messages.some((message) => message.id === adminReplyTarget.id)) {
+      setAdminReplyTarget(null);
+    }
+  }, [adminReplyTarget, selectedThread]);
+
   const statusCounts = threads.reduce(
     (counts, thread) => {
       counts.all += 1;
@@ -854,9 +877,11 @@ function App() {
           pin: studentProfile?.pin,
           text,
           clientMessageId,
+          replyTo: studentReplyTarget,
         }),
       });
       setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+      setStudentReplyTarget(null);
     } catch {
       lastStudentSendRef.current = "";
       setStudentMessage(text);
@@ -912,9 +937,16 @@ function App() {
     try {
       const data = await apiRequest(`/api/threads/${selectedThread.id}/messages`, {
         method: "POST",
-        body: JSON.stringify({ author: "admin", authorLabel, text, clientMessageId }),
+        body: JSON.stringify({
+          author: "admin",
+          authorLabel,
+          text,
+          clientMessageId,
+          replyTo: adminReplyTarget,
+        }),
       });
       setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+      setAdminReplyTarget(null);
       fetch(`/api/threads/${selectedThread.id}/typing`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -948,6 +980,22 @@ function App() {
   const handleMessageEditCancel = () => {
     setEditingMessageId(null);
     setEditingText("");
+  };
+
+  const handleStudentReplyStart = (message) => {
+    setActiveMessageMenuId(null);
+    setEditingMessageId(null);
+    setEditingText("");
+    setStudentReplyTarget(createReplyTarget(message));
+    studentComposeRef.current?.focus();
+  };
+
+  const handleAdminReplyStart = (message) => {
+    setActiveMessageMenuId(null);
+    setEditingMessageId(null);
+    setEditingText("");
+    setAdminReplyTarget(createReplyTarget(message));
+    adminComposeRef.current?.focus();
   };
 
   const getMessagePayload = (author, extra = {}) =>
@@ -1234,6 +1282,7 @@ function App() {
           adminName={adminName}
           adminPassword={adminPassword}
           adminReply={adminReply}
+          adminReplyTarget={adminReplyTarget}
           adminSection={adminSection}
           adminTagFilter={adminTagFilter}
           adminStudentMessage={adminStudentMessage}
@@ -1242,6 +1291,7 @@ function App() {
           handleAdminLogin={handleAdminLogin}
           handleAdminReply={handleAdminReply}
           handleAdminStatusChange={handleAdminStatusChange}
+          handleAdminReplyStart={handleAdminReplyStart}
           handleCreateStudentChat={handleCreateStudentChat}
           onOpenBanDialog={openBanDialog}
           onUnban={confirmUnban}
@@ -1267,10 +1317,12 @@ function App() {
           selectedThreadId={selectedThreadId}
           selectedStudent={selectedStudent}
           selectedStudentKey={selectedStudentKey}
+          adminComposeRef={adminComposeRef}
           setAdminFilter={setAdminFilter}
           setAdminName={setAdminName}
           setAdminPassword={setAdminPassword}
           setAdminReply={handleAdminReplyChange}
+          setAdminReplyTarget={setAdminReplyTarget}
           setAdminSection={setAdminSection}
           setAdminTagFilter={setAdminTagFilter}
           setAdminStudentMessage={setAdminStudentMessage}
@@ -1389,6 +1441,7 @@ function App() {
           handleMessageEditCancel={handleMessageEditCancel}
           handleMessageEditStart={handleMessageEditStart}
           handleMessageUpdate={handleMessageUpdate}
+          handleStudentReplyStart={handleStudentReplyStart}
           activeMessageMenuId={activeMessageMenuId}
           onRequestReopenThread={confirmReopenThread}
           handleStudentSend={handleStudentSend}
@@ -1402,10 +1455,13 @@ function App() {
           setIsSupportOpen={closeSupport}
           setSupportView={setSupportView}
           setStudentMessage={handleStudentMessageChange}
+          setStudentReplyTarget={setStudentReplyTarget}
           isCreatingThread={isCreatingThread}
           studentProfile={studentProfile}
+          studentReplyTarget={studentReplyTarget}
           studentThreads={studentThreads}
           studentMessage={studentMessage}
+          studentComposeRef={studentComposeRef}
           supportView={supportView}
           tags={tags}
         />
@@ -1788,6 +1844,7 @@ function SupportPanel({
   editingMessageId,
   editingText,
   activeMessageMenuId,
+  handleStudentReplyStart,
   form,
   handleCreateThread,
   handleMessageDelete,
@@ -1807,9 +1864,12 @@ function SupportPanel({
   setIsSupportOpen,
   setSupportView,
   setStudentMessage,
+  setStudentReplyTarget,
   studentProfile,
+  studentReplyTarget,
   studentThreads,
   studentMessage,
+  studentComposeRef,
   supportView,
   tags,
 }) {
@@ -1818,6 +1878,7 @@ function SupportPanel({
 
   const openNewInquiry = () => {
     setCurrentThreadId(null);
+    setStudentReplyTarget(null);
     // Do NOT navigate to "/support" here. The panel is already open on this view,
     // and changing the route would re-trigger the route-sync effect that forces
     // supportView back to "rooms", preventing the new-inquiry form from opening.
@@ -1841,6 +1902,7 @@ function SupportPanel({
             className="icon-button back-icon-button"
             onClick={() => {
               setCurrentThreadId(null);
+              setStudentReplyTarget(null);
               setSupportView("rooms");
               navigateTo("/support");
             }}
@@ -1852,7 +1914,10 @@ function SupportPanel({
         <button
           aria-label="닫기"
           className="icon-button"
-          onClick={() => setIsSupportOpen(false)}
+          onClick={() => {
+            setStudentReplyTarget(null);
+            setIsSupportOpen(false);
+          }}
           type="button"
         >
           <X size={22} />
@@ -1877,6 +1942,7 @@ function SupportPanel({
                 className="student-room"
                 key={thread.id}
                 onClick={() => {
+                  setStudentReplyTarget(null);
                   setCurrentThreadId(thread.id);
                   setSupportView("chat");
                   navigateTo(getSupportThreadPath(thread.id));
@@ -1967,7 +2033,14 @@ function SupportPanel({
       {supportView === "chat" && currentThread && (
         <>
           <div className="conversation-title">
-            <button className="back-to-rooms" onClick={() => setSupportView("rooms")} type="button">
+            <button
+              className="back-to-rooms"
+              onClick={() => {
+                setStudentReplyTarget(null);
+                setSupportView("rooms");
+              }}
+              type="button"
+            >
               문의방 목록
             </button>
             <strong>{currentThread.title}</strong>
@@ -1998,6 +2071,7 @@ function SupportPanel({
                 onCancelEdit={handleMessageEditCancel}
                 onChangeEdit={setEditingText}
                 onDelete={() => handleMessageDelete(currentThread, message, "student")}
+                onReply={() => handleStudentReplyStart(message)}
                 onSaveEdit={() => handleMessageUpdate(currentThread, message, "student")}
                 setActiveMessageMenuId={setActiveMessageMenuId}
                 onStartEdit={() => handleMessageEditStart(message)}
@@ -2015,10 +2089,17 @@ function SupportPanel({
             </div>
           ) : (
             <div className="support-compose">
+              {studentReplyTarget && (
+                <ReplyPreviewBar
+                  replyTarget={studentReplyTarget}
+                  onClear={() => setStudentReplyTarget(null)}
+                />
+              )}
               <button aria-label="첨부" className="plus-button" type="button">
                 +
               </button>
               <textarea
+                ref={studentComposeRef}
                 value={studentMessage}
                 onChange={(event) => setStudentMessage(event.target.value)}
                 onKeyDown={(event) => {
@@ -2303,6 +2384,20 @@ function NotificationAdminPanel({
   );
 }
 
+function ReplyPreviewBar({ onClear, replyTarget }) {
+  return (
+    <div className="reply-preview-bar">
+      <div>
+        <strong>{replyTarget.authorLabel}에게 답장</strong>
+        <span>{replyTarget.text}</span>
+      </div>
+      <button aria-label="답장 취소" onClick={onClear} type="button">
+        <X size={15} />
+      </button>
+    </div>
+  );
+}
+
 function MessageBubble({
   actor,
   activeMessageMenuId,
@@ -2313,6 +2408,7 @@ function MessageBubble({
   onCancelEdit,
   onChangeEdit,
   onDelete,
+  onReply,
   onSaveEdit,
   onStartEdit,
   setActiveMessageMenuId,
@@ -2323,6 +2419,16 @@ function MessageBubble({
 
   return (
     <article className={`bubble ${message.author}`} key={message.id}>
+      {!isEditing && onReply && (
+        <button
+          aria-label="답장"
+          className={`message-reply-trigger ${isOwnMessage && canManage ? "with-menu" : ""}`}
+          onClick={onReply}
+          type="button"
+        >
+          <Reply size={14} />
+        </button>
+      )}
       {isOwnMessage && canManage && !isEditing && (
         <div className="message-menu-wrap">
           <button
@@ -2393,7 +2499,15 @@ function MessageBubble({
           </div>
         </div>
       ) : (
-        <p>{message.text}</p>
+        <>
+          {message.replyTo && (
+            <div className="message-reply-context">
+              <strong>{message.replyTo.authorLabel}</strong>
+              <span>{message.replyTo.text}</span>
+            </div>
+          )}
+          <p>{message.text}</p>
+        </>
       )}
     </article>
   );
@@ -2401,11 +2515,13 @@ function MessageBubble({
 
 function AdminScreen({
   adminAuthed,
+  adminComposeRef,
   adminError,
   adminFilter,
   adminName,
   adminPassword,
   adminReply,
+  adminReplyTarget,
   adminSection,
   adminTagFilter,
   adminStudentMessage,
@@ -2413,6 +2529,7 @@ function AdminScreen({
   handleCreateTag,
   handleAdminLogin,
   handleAdminReply,
+  handleAdminReplyStart,
   handleAdminStatusChange,
   handleCreateStudentChat,
   onOpenBanDialog,
@@ -2444,6 +2561,7 @@ function AdminScreen({
   setAdminName,
   setAdminPassword,
   setAdminReply,
+  setAdminReplyTarget,
   setAdminSection,
   setAdminTagFilter,
   setAdminStudentMessage,
@@ -2788,6 +2906,7 @@ function AdminScreen({
                   onCancelEdit={handleMessageEditCancel}
                   onChangeEdit={setEditingText}
                   onDelete={() => handleMessageDelete(selectedThread, message, "admin")}
+                  onReply={() => handleAdminReplyStart(message)}
                   onSaveEdit={() => handleMessageUpdate(selectedThread, message, "admin")}
                   setActiveMessageMenuId={setActiveMessageMenuId}
                   onStartEdit={() => handleMessageEditStart(message)}
@@ -2796,7 +2915,14 @@ function AdminScreen({
             </div>
 
             <footer className="admin-reply">
+              {adminReplyTarget && (
+                <ReplyPreviewBar
+                  replyTarget={adminReplyTarget}
+                  onClear={() => setAdminReplyTarget(null)}
+                />
+              )}
               <textarea
+                ref={adminComposeRef}
                 value={adminReply}
                 onChange={(event) => setAdminReply(event.target.value)}
                 onKeyDown={(event) => {
