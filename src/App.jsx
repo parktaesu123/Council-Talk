@@ -165,10 +165,14 @@ function App() {
   const [adminName, setAdminName] = useState(
     () => localStorage.getItem("council-talk-admin-name") || "학생회",
   );
+  const [isStudentSending, setIsStudentSending] = useState(false);
+  const [isAdminSending, setIsAdminSending] = useState(false);
   const adminClientIdRef = useRef(
     sessionStorage.getItem("council-talk-admin-client-id") || crypto.randomUUID(),
   );
   const adminSyncFallbackRef = useRef(null);
+  const studentSendLockRef = useRef(false);
+  const adminSendLockRef = useRef(false);
   const [selectedThreadId, setSelectedThreadId] = useState(null);
   const [deepLinkedThreadId, setDeepLinkedThreadId] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -818,11 +822,21 @@ function App() {
   };
 
   const handleStudentSend = async () => {
-    if (!currentThread || normalizeStatus(currentThread.status) === "완료" || !studentMessage.trim()) {
+    if (
+      studentSendLockRef.current ||
+      !currentThread ||
+      normalizeStatus(currentThread.status) === "완료" ||
+      !studentMessage.trim()
+    ) {
       return;
     }
 
+    studentSendLockRef.current = true;
+    setIsStudentSending(true);
     const text = studentMessage.trim();
+    const clientMessageId = crypto.randomUUID();
+    setStudentMessage("");
+
     try {
       const data = await apiRequest(`/api/threads/${currentThread.id}/messages`, {
         method: "POST",
@@ -832,33 +846,16 @@ function App() {
           name: studentProfile?.name,
           pin: studentProfile?.pin,
           text,
+          clientMessageId,
         }),
       });
       setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
     } catch {
-      saveThreadsFallback((current) =>
-        current.map((thread) =>
-          thread.id === currentThread.id
-            ? {
-                ...thread,
-                status: "미완료",
-                updatedAt: new Date().toISOString(),
-                messages: [
-                  ...thread.messages,
-                  {
-                    id: crypto.randomUUID(),
-                    author: "student",
-                    authorLabel: thread.name,
-                    time: getTimeLabel(),
-                    text,
-                  },
-                ],
-              }
-            : thread,
-        ),
-      );
+      setStudentMessage(text);
+    } finally {
+      studentSendLockRef.current = false;
+      setIsStudentSending(false);
     }
-    setStudentMessage("");
   };
 
   const handleAdminLogin = async (event) => {
@@ -883,17 +880,21 @@ function App() {
   };
 
   const handleAdminReply = async () => {
-    if (!selectedThread || !adminReply.trim()) {
+    if (adminSendLockRef.current || !selectedThread || !adminReply.trim()) {
       return;
     }
 
+    adminSendLockRef.current = true;
+    setIsAdminSending(true);
     const text = adminReply.trim();
     const authorLabel = adminName.trim() || "학생회";
+    const clientMessageId = crypto.randomUUID();
+    setAdminReply("");
 
     try {
       const data = await apiRequest(`/api/threads/${selectedThread.id}/messages`, {
         method: "POST",
-        body: JSON.stringify({ author: "admin", authorLabel, text }),
+        body: JSON.stringify({ author: "admin", authorLabel, text, clientMessageId }),
       });
       setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
       fetch(`/api/threads/${selectedThread.id}/typing`, {
@@ -906,29 +907,11 @@ function App() {
         }),
       }).catch(() => {});
     } catch {
-      saveThreadsFallback((current) =>
-        current.map((thread) =>
-          thread.id === selectedThread.id
-            ? {
-                ...thread,
-                status: "진행중",
-                updatedAt: new Date().toISOString(),
-                messages: [
-                  ...thread.messages,
-                  {
-                    id: crypto.randomUUID(),
-                    author: "admin",
-                    authorLabel,
-                    time: getTimeLabel(),
-                    text,
-                  },
-                ],
-              }
-            : thread,
-        ),
-      );
+      setAdminReply(text);
+    } finally {
+      adminSendLockRef.current = false;
+      setIsAdminSending(false);
     }
-    setAdminReply("");
   };
 
   const handleMessageEditStart = (message) => {
@@ -1246,6 +1229,7 @@ function App() {
           editingMessageId={editingMessageId}
           editingText={editingText}
           activeMessageMenuId={activeMessageMenuId}
+          isAdminSending={isAdminSending}
           pendingProfileRequests={pendingProfileRequests}
           mailStatus={mailStatus}
           notificationEmail={notificationEmail}
@@ -1382,6 +1366,7 @@ function App() {
           activeMessageMenuId={activeMessageMenuId}
           onRequestReopenThread={confirmReopenThread}
           handleStudentSend={handleStudentSend}
+          isStudentSending={isStudentSending}
           navigateTo={navigateTo}
           resetStudentProfile={resetStudentProfile}
           setActiveMessageMenuId={setActiveMessageMenuId}
@@ -1785,6 +1770,7 @@ function SupportPanel({
   handleMessageUpdate,
   handleStudentSend,
   isCreatingThread,
+  isStudentSending,
   navigateTo,
   onRequestReopenThread,
   resetStudentProfile,
@@ -2012,13 +1998,22 @@ function SupportPanel({
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
-                    handleStudentSend();
+                    if (!isStudentSending) {
+                      handleStudentSend();
+                    }
                   }
                 }}
+                disabled={isStudentSending}
                 placeholder="추가 문의를 입력하세요..."
                 rows={1}
               />
-              <button aria-label="전송" className="round-send" onClick={handleStudentSend} type="button">
+              <button
+                aria-label="전송"
+                className="round-send"
+                disabled={isStudentSending || !studentMessage.trim()}
+                onClick={handleStudentSend}
+                type="button"
+              >
                 <ArrowUp size={22} />
               </button>
             </div>
@@ -2406,6 +2401,7 @@ function AdminScreen({
   editingMessageId,
   editingText,
   activeMessageMenuId,
+  isAdminSending,
   navigateTo,
   onRequestDeleteTag,
   pendingProfileRequests,
@@ -2780,13 +2776,22 @@ function AdminScreen({
                 onKeyDown={(event) => {
                   if (event.key === "Enter" && !event.shiftKey) {
                     event.preventDefault();
-                    handleAdminReply();
+                    if (!isAdminSending) {
+                      handleAdminReply();
+                    }
                   }
                 }}
+                disabled={isAdminSending}
                 placeholder={`${adminName || "학생회"} 이름으로 답변하기`}
                 rows={4}
               />
-              <button aria-label="답변 보내기" className="black-icon-button" onClick={handleAdminReply} type="button">
+              <button
+                aria-label="답변 보내기"
+                className="black-icon-button"
+                disabled={isAdminSending || !adminReply.trim()}
+                onClick={handleAdminReply}
+                type="button"
+              >
                 <Send size={19} />
               </button>
             </footer>

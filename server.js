@@ -183,6 +183,11 @@ const normalizeStatus = (status) => {
   return ["미완료", "진행중", "완료"].includes(status) ? status : "미완료";
 };
 
+const normalizeClientMessageId = (value) => {
+  const id = String(value || "").trim();
+  return /^[a-zA-Z0-9_-]{8,80}$/.test(id) ? id : "";
+};
+
 const enqueueThreadUpdate = async (operation) => {
   const result = operationQueue.then(async () => {
     const threads = await readThreads();
@@ -1024,6 +1029,7 @@ app.post("/api/admin/student-chat", async (request, response) => {
 
 app.post("/api/threads/:id/messages", async (request, response) => {
   const { author, authorLabel, text } = request.body || {};
+  const clientMessageId = normalizeClientMessageId(request.body?.clientMessageId);
 
   if (!text || !["student", "admin"].includes(author)) {
     response.status(400).json({ message: "Invalid message" });
@@ -1056,12 +1062,32 @@ app.post("/api/threads/:id/messages", async (request, response) => {
       return "completed";
     }
 
+    const existingMessage = clientMessageId
+      ? thread.messages.find((message) => message.clientMessageId === clientMessageId)
+      : null;
+
+    if (existingMessage) {
+      return {
+        duplicate: true,
+        thread,
+        message: existingMessage,
+        threads:
+          author === "student"
+            ? threads.filter(
+                (item) => item.studentId === profile.studentId && item.name === profile.name,
+              )
+            : threads,
+      };
+    }
+
     thread.status = author === "admin" ? "진행중" : "미완료";
     thread.updatedAt = new Date().toISOString();
     const message = {
       id: crypto.randomUUID(),
+      clientMessageId,
       author,
       authorLabel: author === "admin" ? String(authorLabel || "학생회").trim() : thread.name,
+      createdAt: new Date().toISOString(),
       time: timeLabel(),
       text: String(text).trim(),
     };
@@ -1094,13 +1120,15 @@ app.post("/api/threads/:id/messages", async (request, response) => {
     return;
   }
 
-  const { thread, threads, message } = result;
-  if (message?.author === "admin") {
+  const { duplicate, thread, threads, message } = result;
+  if (!duplicate && message?.author === "admin") {
     await sendStudentReplyNotification(thread, message, request);
     clearTypingForThread(thread.id);
   }
-  publishThread(thread);
-  response.json({ thread, threads });
+  if (!duplicate) {
+    publishThread(thread);
+  }
+  response.json({ duplicate: Boolean(duplicate), thread, threads });
 });
 
 app.patch("/api/threads/:id/messages/:messageId", async (request, response) => {
