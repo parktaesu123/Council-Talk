@@ -89,6 +89,7 @@ const normalizeStatus = (status) => {
 const normalizeTags = (tags) => (Array.isArray(tags) ? tags : []);
 const normalizeThread = (thread) => ({ ...thread, status: normalizeStatus(thread.status) });
 const normalizeThreads = (threads) => (Array.isArray(threads) ? threads.map(normalizeThread) : []);
+const messageSignature = (threadId, text) => `${threadId}:${String(text || "").trim()}`;
 const mergeThreadList = (threads, nextThread) => {
   const normalized = normalizeThread(nextThread);
   const index = threads.findIndex((thread) => thread.id === normalized.id);
@@ -173,6 +174,8 @@ function App() {
   const adminSyncFallbackRef = useRef(null);
   const studentSendLockRef = useRef(false);
   const adminSendLockRef = useRef(false);
+  const lastStudentSendRef = useRef("");
+  const lastAdminSendRef = useRef("");
   const [selectedThreadId, setSelectedThreadId] = useState(null);
   const [deepLinkedThreadId, setDeepLinkedThreadId] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -822,18 +825,22 @@ function App() {
   };
 
   const handleStudentSend = async () => {
+    const text = studentMessage.trim();
+    const signature = currentThread ? messageSignature(currentThread.id, text) : "";
+
     if (
       studentSendLockRef.current ||
+      lastStudentSendRef.current === signature ||
       !currentThread ||
       normalizeStatus(currentThread.status) === "완료" ||
-      !studentMessage.trim()
+      !text
     ) {
       return;
     }
 
     studentSendLockRef.current = true;
+    lastStudentSendRef.current = signature;
     setIsStudentSending(true);
-    const text = studentMessage.trim();
     const clientMessageId = crypto.randomUUID();
     setStudentMessage("");
 
@@ -851,11 +858,19 @@ function App() {
       });
       setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
     } catch {
+      lastStudentSendRef.current = "";
       setStudentMessage(text);
     } finally {
       studentSendLockRef.current = false;
       setIsStudentSending(false);
     }
+  };
+
+  const handleStudentMessageChange = (value) => {
+    if (currentThread && messageSignature(currentThread.id, value) !== lastStudentSendRef.current) {
+      lastStudentSendRef.current = "";
+    }
+    setStudentMessage(value);
   };
 
   const handleAdminLogin = async (event) => {
@@ -880,13 +895,16 @@ function App() {
   };
 
   const handleAdminReply = async () => {
-    if (adminSendLockRef.current || !selectedThread || !adminReply.trim()) {
+    const text = adminReply.trim();
+    const signature = selectedThread ? messageSignature(selectedThread.id, text) : "";
+
+    if (adminSendLockRef.current || lastAdminSendRef.current === signature || !selectedThread || !text) {
       return;
     }
 
     adminSendLockRef.current = true;
+    lastAdminSendRef.current = signature;
     setIsAdminSending(true);
-    const text = adminReply.trim();
     const authorLabel = adminName.trim() || "학생회";
     const clientMessageId = crypto.randomUUID();
     setAdminReply("");
@@ -907,11 +925,19 @@ function App() {
         }),
       }).catch(() => {});
     } catch {
+      lastAdminSendRef.current = "";
       setAdminReply(text);
     } finally {
       adminSendLockRef.current = false;
       setIsAdminSending(false);
     }
+  };
+
+  const handleAdminReplyChange = (value) => {
+    if (selectedThread && messageSignature(selectedThread.id, value) !== lastAdminSendRef.current) {
+      lastAdminSendRef.current = "";
+    }
+    setAdminReply(value);
   };
 
   const handleMessageEditStart = (message) => {
@@ -1244,7 +1270,7 @@ function App() {
           setAdminFilter={setAdminFilter}
           setAdminName={setAdminName}
           setAdminPassword={setAdminPassword}
-          setAdminReply={setAdminReply}
+          setAdminReply={handleAdminReplyChange}
           setAdminSection={setAdminSection}
           setAdminTagFilter={setAdminTagFilter}
           setAdminStudentMessage={setAdminStudentMessage}
@@ -1375,7 +1401,7 @@ function App() {
           setForm={setForm}
           setIsSupportOpen={closeSupport}
           setSupportView={setSupportView}
-          setStudentMessage={setStudentMessage}
+          setStudentMessage={handleStudentMessageChange}
           isCreatingThread={isCreatingThread}
           studentProfile={studentProfile}
           studentThreads={studentThreads}

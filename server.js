@@ -188,6 +188,15 @@ const normalizeClientMessageId = (value) => {
   return /^[a-zA-Z0-9_-]{8,80}$/.test(id) ? id : "";
 };
 
+const isRecentDuplicateMessage = (message, { author, text }) => {
+  if (!message || message.author !== author || String(message.text || "").trim() !== text) {
+    return false;
+  }
+
+  const createdAt = Date.parse(message.createdAt || message.updatedAt || "");
+  return Number.isFinite(createdAt) && Date.now() - createdAt < 3000;
+};
+
 const enqueueThreadUpdate = async (operation) => {
   const result = operationQueue.then(async () => {
     const threads = await readThreads();
@@ -1029,9 +1038,10 @@ app.post("/api/admin/student-chat", async (request, response) => {
 
 app.post("/api/threads/:id/messages", async (request, response) => {
   const { author, authorLabel, text } = request.body || {};
+  const normalizedText = String(text || "").trim();
   const clientMessageId = normalizeClientMessageId(request.body?.clientMessageId);
 
-  if (!text || !["student", "admin"].includes(author)) {
+  if (!normalizedText || !["student", "admin"].includes(author)) {
     response.status(400).json({ message: "Invalid message" });
     return;
   }
@@ -1065,12 +1075,16 @@ app.post("/api/threads/:id/messages", async (request, response) => {
     const existingMessage = clientMessageId
       ? thread.messages.find((message) => message.clientMessageId === clientMessageId)
       : null;
+    const recentDuplicateMessage = [...thread.messages]
+      .reverse()
+      .find((message) => isRecentDuplicateMessage(message, { author, text: normalizedText }));
 
-    if (existingMessage) {
+    if (existingMessage || recentDuplicateMessage) {
+      const duplicateMessage = existingMessage || recentDuplicateMessage;
       return {
         duplicate: true,
         thread,
-        message: existingMessage,
+        message: duplicateMessage,
         threads:
           author === "student"
             ? threads.filter(
@@ -1089,7 +1103,7 @@ app.post("/api/threads/:id/messages", async (request, response) => {
       authorLabel: author === "admin" ? String(authorLabel || "학생회").trim() : thread.name,
       createdAt: new Date().toISOString(),
       time: timeLabel(),
-      text: String(text).trim(),
+      text: normalizedText,
     };
     thread.messages.push(message);
 
