@@ -377,7 +377,10 @@ export const createCouncilService = ({
         ],
       }));
 
-      return { requests: outcome.state.profileRequests };
+      return {
+        domainEvents: outcome.events,
+        requests: outcome.state.profileRequests,
+      };
     },
 
     async listProfileRequests() {
@@ -475,6 +478,7 @@ export const createCouncilService = ({
       });
 
       return {
+        domainEvents: outcome.events,
         requests: outcome.state.profileRequests,
         students: listPublicStudents(outcome.state),
         threads: normalizeThreadsForClient(outcome.state.threads),

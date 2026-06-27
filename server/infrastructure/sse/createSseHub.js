@@ -5,13 +5,16 @@ export const createSseHub = ({ heartbeatMs = 15000, snapshotProvider }) => {
   const clients = new Set();
   let sequence = 0;
 
-  const broadcast = (event, payload) => {
+  const writeToClient = (client, event, payload) => {
     sequence += 1;
     const body = serializeSseEvent({ event, id: sequence, payload });
+    client.write(body);
+  };
 
+  const broadcast = (event, payload) => {
     for (const client of clients) {
       try {
-        client.write(body);
+        writeToClient(client, event, payload);
       } catch {
         clients.delete(client);
       }
@@ -28,13 +31,13 @@ export const createSseHub = ({ heartbeatMs = 15000, snapshotProvider }) => {
       response.write("retry: 2000\n\n");
 
       clients.add(response);
-      broadcast("connected", { ok: true });
+      writeToClient(response, "connected", { ok: true });
 
       if (snapshotProvider) {
-        const snapshot = await snapshotProvider();
+        const snapshotEvents = (await snapshotProvider()) || [];
 
-        if (snapshot) {
-          broadcast("snapshot", snapshot);
+        for (const snapshotEvent of snapshotEvents) {
+          writeToClient(response, snapshotEvent.event, snapshotEvent.payload);
         }
       }
 
