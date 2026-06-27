@@ -22,6 +22,7 @@ ENV DATA_DIR=/app/data
 COPY --from=build /app/node_modules ./node_modules
 COPY --from=build /app/dist ./dist
 COPY package.json server.js ./
+COPY server ./server
 
 EXPOSE 3000
 
