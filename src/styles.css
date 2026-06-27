@@ -2261,3 +2261,127 @@ textarea:focus {
     transform: translateY(0);
   }
 }
+
+/* --- Student ban feature --- */
+.ban-badge {
+  display: inline-block;
+  margin-left: 8px;
+  padding: 2px 8px;
+  border-radius: 999px;
+  background: #fee2e2;
+  color: #b91c1c;
+  font-size: 12px;
+  font-style: normal;
+  font-weight: 600;
+  vertical-align: middle;
+}
+
+.ban-notice {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  padding: 14px 16px;
+  border: 1px solid #fecaca;
+  background: #fef2f2;
+  border-radius: 12px;
+  color: #991b1b;
+}
+.ban-notice strong { font-size: 15px; }
+.ban-notice span { font-size: 13px; color: #b91c1c; }
+.ban-notice em { font-size: 13px; font-style: normal; color: #7f1d1d; }
+
+.student-ban-controls {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 14px 0;
+  border-top: 1px solid #ececec;
+  border-bottom: 1px solid #ececec;
+  margin: 12px 0;
+}
+.student-ban-controls label {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 13px;
+  color: #4b5563;
+}
+.student-ban-controls input {
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+}
+.ban-current-reason {
+  font-size: 13px;
+  color: #991b1b;
+}
+
+.danger-button {
+  align-self: flex-start;
+  padding: 10px 16px;
+  border: none;
+  border-radius: 8px;
+  background: #dc2626;
+  color: #fff;
+  font-weight: 600;
+  cursor: pointer;
+}
+.danger-button:hover { background: #b91c1c; }
+
+.ghost-button {
+  align-self: flex-start;
+  padding: 10px 16px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #111827;
+  font-weight: 600;
+  cursor: pointer;
+}
+.ghost-button:hover { background: #f3f4f6; }
+
+/* --- Ban UI: compact button + modal --- */
+.student-detail-head {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 12px;
+}
+.text-ban-button {
+  flex-shrink: 0;
+  padding: 6px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  background: #fff;
+  color: #374151;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+}
+.text-ban-button:hover { background: #f3f4f6; }
+.text-ban-button.danger {
+  border-color: #fca5a5;
+  color: #dc2626;
+}
+.text-ban-button.danger:hover { background: #fef2f2; }
+
+.ban-dialog-reason {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  margin: 6px 0 14px;
+  text-align: left;
+  font-size: 13px;
+  color: #4b5563;
+}
+.ban-dialog-reason textarea {
+  width: 100%;
+  padding: 10px 12px;
+  border: 1px solid #d1d5db;
+  border-radius: 8px;
+  font-size: 14px;
+  font-family: inherit;
+  resize: vertical;
+  box-sizing: border-box;
+}
