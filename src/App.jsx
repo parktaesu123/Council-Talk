@@ -87,6 +87,20 @@ const normalizeStatus = (status) => {
 };
 
 const normalizeTags = (tags) => (Array.isArray(tags) ? tags : []);
+const normalizeThread = (thread) => ({ ...thread, status: normalizeStatus(thread.status) });
+const normalizeThreads = (threads) => (Array.isArray(threads) ? threads.map(normalizeThread) : []);
+const mergeThreadList = (threads, nextThread) => {
+  const normalized = normalizeThread(nextThread);
+  const index = threads.findIndex((thread) => thread.id === normalized.id);
+
+  if (index < 0) {
+    return [normalized, ...threads];
+  }
+
+  const nextThreads = [...threads];
+  nextThreads[index] = normalized;
+  return nextThreads.sort((a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt));
+};
 const studentKey = (student) => `${student.studentId}:${student.name}`;
 const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(String(email || "").trim());
 const decodePathPart = (value) => {
@@ -154,6 +168,7 @@ function App() {
   const adminClientIdRef = useRef(
     sessionStorage.getItem("council-talk-admin-client-id") || crypto.randomUUID(),
   );
+  const adminSyncFallbackRef = useRef(null);
   const [selectedThreadId, setSelectedThreadId] = useState(null);
   const [deepLinkedThreadId, setDeepLinkedThreadId] = useState(() => {
     const params = new URLSearchParams(window.location.search);
@@ -167,12 +182,14 @@ function App() {
   const [adminFilter, setAdminFilter] = useState("all");
   const [adminTagFilter, setAdminTagFilter] = useState("all");
   const [adminTyping, setAdminTyping] = useState([]);
+  const [realtimeStatus, setRealtimeStatus] = useState("idle");
   const [adminSection, setAdminSection] = useState(() => getAdminSectionFromPath(window.location.pathname));
   const [selectedStudentKey, setSelectedStudentKey] = useState("");
   const [adminStudentMessage, setAdminStudentMessage] = useState("");
   const [notificationEmail, setNotificationEmail] = useState("");
   const [tagName, setTagName] = useState("");
   const isAdminRoute = route.startsWith("/admin");
+  const adminReplyHasText = Boolean(adminReply.trim());
 
   const syncPageState = (path) => {
     setRoute(path);
@@ -251,25 +268,64 @@ function App() {
       return undefined;
     }
 
+    setRealtimeStatus("connecting");
     const events = new EventSource("/api/events");
 
-    events.addEventListener("threads", (event) => {
-      const data = JSON.parse(event.data);
-      setThreads((data.threads || []).map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+    events.onopen = () => {
+      setRealtimeStatus("connected");
+    };
+
+    events.addEventListener("sync", (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        setThreads(normalizeThreads(data.threads));
+      } catch {
+        loadAdminData();
+      }
+    });
+
+    events.addEventListener("thread", (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (data.thread) {
+          setThreads((current) => mergeThreadList(current, data.thread));
+        }
+      } catch {
+        loadAdminData();
+      }
     });
 
     events.addEventListener("typing", (event) => {
-      const data = JSON.parse(event.data);
-      setAdminTyping(
-        (data.typing || []).filter((item) => item.clientId !== adminClientIdRef.current),
-      );
+      try {
+        const data = JSON.parse(event.data);
+        setAdminTyping(
+          (data.typing || []).filter((item) => item.clientId !== adminClientIdRef.current),
+        );
+      } catch {
+        setAdminTyping([]);
+      }
     });
 
     events.onerror = () => {
-      setTimeout(() => loadAdminData(), 1000);
+      setRealtimeStatus("reconnecting");
+      if (adminSyncFallbackRef.current) {
+        return;
+      }
+
+      adminSyncFallbackRef.current = setTimeout(() => {
+        loadAdminData();
+        adminSyncFallbackRef.current = null;
+      }, 4000);
     };
 
-    return () => events.close();
+    return () => {
+      if (adminSyncFallbackRef.current) {
+        clearTimeout(adminSyncFallbackRef.current);
+        adminSyncFallbackRef.current = null;
+      }
+      events.close();
+      setRealtimeStatus("idle");
+    };
   }, [adminAuthed, isAdminRoute]);
 
   useEffect(() => {
@@ -278,21 +334,32 @@ function App() {
     }
 
     const threadId = selectedThreadId;
-    const active = Boolean(adminReply.trim());
-    const timeout = setTimeout(() => {
+    const active = adminReplyHasText;
+    const sendTyping = (isActive) => {
       fetch(`/api/threads/${threadId}/typing`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
-          active,
+          active: isActive,
           authorLabel: adminName.trim() || "학생회",
           clientId: adminClientIdRef.current,
         }),
       }).catch(() => {});
-    }, active ? 220 : 0);
+    };
 
-    return () => clearTimeout(timeout);
-  }, [adminAuthed, adminName, adminReply, isAdminRoute, selectedThreadId]);
+    if (!active) {
+      sendTyping(false);
+      return undefined;
+    }
+
+    sendTyping(true);
+    const interval = setInterval(() => sendTyping(true), 4000);
+
+    return () => {
+      clearInterval(interval);
+      sendTyping(false);
+    };
+  }, [adminAuthed, adminName, adminReplyHasText, isAdminRoute, selectedThreadId]);
 
   useEffect(() => {
     if (!adminAuthed || !isAdminRoute || !selectedThreadId) {
@@ -1122,6 +1189,7 @@ function App() {
           notificationEmail={notificationEmail}
           notificationEmails={notificationEmails}
           navigateTo={navigateTo}
+          realtimeStatus={realtimeStatus}
           selectedThreadTyping={selectedThreadTyping}
           selectedThread={selectedThread}
           selectedThreadId={selectedThreadId}
@@ -2192,6 +2260,7 @@ function AdminScreen({
   notificationEmail,
   notificationEmails,
   mailStatus,
+  realtimeStatus,
   selectedThreadTyping,
   selectedThread,
   selectedThreadId,
@@ -2289,6 +2358,13 @@ function AdminScreen({
           </button>
         </nav>
         <label className="admin-name">
+          <span className={`realtime-pill ${realtimeStatus}`}>
+            {realtimeStatus === "connected"
+              ? "실시간 연결됨"
+              : realtimeStatus === "reconnecting"
+                ? "재연결 중"
+                : "실시간 대기"}
+          </span>
           <UserRound size={17} />
           <input
             value={adminName}

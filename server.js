@@ -26,6 +26,7 @@ let profileRequestOperationQueue = Promise.resolve();
 let notificationEmailOperationQueue = Promise.resolve();
 const eventClients = new Set();
 const typingStates = new Map();
+let eventSequence = 0;
 
 app.use(express.json());
 
@@ -56,13 +57,19 @@ const normalizeThreadForClient = (thread) => ({
 });
 
 const sendEvent = (response, event, payload) => {
+  eventSequence += 1;
+  response.write(`id: ${eventSequence}\n`);
   response.write(`event: ${event}\n`);
   response.write(`data: ${JSON.stringify(payload)}\n\n`);
 };
 
 const broadcastEvent = (event, payload) => {
   for (const client of eventClients) {
-    sendEvent(client, event, payload);
+    try {
+      sendEvent(client, event, payload);
+    } catch {
+      eventClients.delete(client);
+    }
   }
 };
 
@@ -76,8 +83,14 @@ const broadcastTyping = () => {
 
 const publishThreads = async () => {
   const threads = await readThreads();
-  broadcastEvent("threads", {
+  broadcastEvent("sync", {
     threads: threads.map(normalizeThreadForClient),
+  });
+};
+
+const publishThread = (thread) => {
+  broadcastEvent("thread", {
+    thread: normalizeThreadForClient(thread),
   });
 };
 
@@ -528,15 +541,21 @@ app.get("/api/events", async (request, response) => {
   response.setHeader("Content-Type", "text/event-stream");
   response.setHeader("Cache-Control", "no-cache, no-transform");
   response.setHeader("Connection", "keep-alive");
+  response.setHeader("X-Accel-Buffering", "no");
   response.flushHeaders?.();
 
   eventClients.add(response);
+  response.write("retry: 2000\n\n");
   sendEvent(response, "connected", { ok: true });
+  const threads = await readThreads();
+  sendEvent(response, "sync", {
+    threads: threads.map(normalizeThreadForClient),
+  });
   sendEvent(response, "typing", getTypingPayload());
 
   const keepAlive = setInterval(() => {
-    response.write(": keep-alive\n\n");
-  }, 25000);
+    response.write("event: ping\ndata: {}\n\n");
+  }, 15000);
 
   request.on("close", () => {
     clearInterval(keepAlive);
@@ -952,7 +971,7 @@ app.post("/api/threads", async (request, response) => {
     sendThreadCreatedNotification(thread, request),
     sendDiscordThreadNotification(thread, request),
   ]);
-  await publishThreads();
+  publishThread(thread);
   response.status(201).json({ thread, threads });
 });
 
@@ -996,7 +1015,7 @@ app.post("/api/admin/student-chat", async (request, response) => {
 
   await sendThreadCreatedNotification(thread, request);
   await sendStudentReplyNotification(thread, initialMessage, request);
-  await publishThreads();
+  publishThread(thread);
   response.status(201).json({ thread, threads });
 });
 
@@ -1072,7 +1091,7 @@ app.post("/api/threads/:id/messages", async (request, response) => {
     await sendStudentReplyNotification(thread, message, request);
     clearTypingForThread(thread.id);
   }
-  await publishThreads();
+  publishThread(thread);
   response.json({ thread, threads });
 });
 
@@ -1116,7 +1135,7 @@ app.patch("/api/threads/:id/messages/:messageId", async (request, response) => {
     return;
   }
 
-  await publishThreads();
+  publishThread(result.thread);
   response.json(result);
 });
 
@@ -1159,7 +1178,7 @@ app.delete("/api/threads/:id/messages/:messageId", async (request, response) => 
     return;
   }
 
-  await publishThreads();
+  publishThread(result.thread);
   response.json(result);
 });
 
@@ -1183,7 +1202,7 @@ app.patch("/api/threads/:id/status", async (request, response) => {
   }
 
   const { thread, threads } = result;
-  await publishThreads();
+  publishThread(thread);
   response.json({ thread, threads });
 });
 
@@ -1221,7 +1240,7 @@ app.post("/api/threads/:id/reopen", async (request, response) => {
     return;
   }
 
-  await publishThreads();
+  publishThread(result.thread);
   response.json(result);
 });
 
