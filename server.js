@@ -549,10 +549,6 @@ app.get("/api/events", async (request, response) => {
   eventClients.add(response);
   response.write("retry: 2000\n\n");
   sendEvent(response, "connected", { ok: true });
-  const threads = await readThreads();
-  sendEvent(response, "sync", {
-    threads: threads.map(normalizeThreadForClient),
-  });
   sendEvent(response, "typing", getTypingPayload());
 
   const keepAlive = setInterval(() => {
