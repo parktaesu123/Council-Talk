@@ -85,6 +85,55 @@ export const normalizeThreadForClient = (thread) => ({
 
 export const normalizeThreadsForClient = (threads) => threads.map(normalizeThreadForClient);
 
+export const createMessagePreview = (message) =>
+  message
+    ? {
+        id: message.id,
+        author: message.author,
+        authorLabel: message.authorLabel,
+        text: message.text,
+        time: message.time,
+        createdAt: message.createdAt,
+      }
+    : null;
+
+export const createThreadSummary = (thread) => ({
+  id: thread.id,
+  studentId: thread.studentId,
+  name: thread.name,
+  title: thread.title,
+  tagId: thread.tagId || "",
+  tagName: thread.tagName || "",
+  status: normalizeThreadStatus(thread.status),
+  createdAt: thread.createdAt,
+  updatedAt: thread.updatedAt,
+  messageCount: Array.isArray(thread.messages) ? thread.messages.length : 0,
+  latestMessage: createMessagePreview(thread.messages?.at(-1) || null),
+});
+
+export const createThreadSummaries = (threads) => threads.map(createThreadSummary);
+
+export const paginateThreadMessages = (thread, { before, limit = 30 } = {}) => {
+  const normalizedLimit = Math.max(1, Math.min(Number(limit) || 30, 100));
+  const messages = Array.isArray(thread.messages) ? thread.messages : [];
+  const cursorIndex = before
+    ? messages.findIndex((message) => message.id === before)
+    : -1;
+  const endExclusive = cursorIndex >= 0 ? cursorIndex : messages.length;
+  const startInclusive = Math.max(0, endExclusive - normalizedLimit);
+  const pageMessages = messages.slice(startInclusive, endExclusive);
+  const hasMore = startInclusive > 0;
+  const nextCursor = hasMore ? pageMessages[0]?.id || null : null;
+
+  return {
+    hasMore,
+    limit: normalizedLimit,
+    messages: pageMessages,
+    nextCursor,
+    totalCount: messages.length,
+  };
+};
+
 export const sortThreadsByActivity = (threads) =>
   [...threads].sort(
     (a, b) => new Date(b.updatedAt || b.createdAt) - new Date(a.updatedAt || a.createdAt),

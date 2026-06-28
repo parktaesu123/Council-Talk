@@ -8,6 +8,7 @@ import { createDomainEvent } from "../../domain/shared/domainEvent.js";
 import {
   canManageMessage,
   canUseThreadAsStudent,
+  createThreadSummaries,
   getVisibleThreads,
   initialCouncilState,
   isRecentDuplicateMessage,
@@ -23,6 +24,7 @@ import {
   normalizeThreadForClient,
   normalizeThreadsForClient,
   normalizeThreadStatus,
+  paginateThreadMessages,
   publicStudent,
   sortThreadsByActivity,
   studentKey,
@@ -96,6 +98,13 @@ export const createCouncilService = ({
       return { threads: normalizeThreadsForClient(sortThreadsByActivity(state.threads)) };
     },
 
+    async listThreadSummaries() {
+      const state = await stateStore.read();
+      return {
+        threads: createThreadSummaries(sortThreadsByActivity(state.threads)),
+      };
+    },
+
     async getThread(threadId) {
       const state = await stateStore.read();
       const thread = state.threads.find((item) => item.id === threadId);
@@ -105,6 +114,29 @@ export const createCouncilService = ({
       }
 
       return { thread: normalizeThreadForClient(thread) };
+    },
+
+    async getThreadMessages(threadId, options = {}) {
+      const state = await stateStore.read();
+      const thread = state.threads.find((item) => item.id === threadId);
+
+      if (!thread) {
+        throw notFound("Thread not found");
+      }
+
+      const page = paginateThreadMessages(thread, options);
+
+      return {
+        hasMore: page.hasMore,
+        limit: page.limit,
+        messages: page.messages,
+        nextCursor: page.nextCursor,
+        thread: {
+          id: thread.id,
+          messageCount: page.totalCount,
+          updatedAt: thread.updatedAt,
+        },
+      };
     },
 
     async listTags() {

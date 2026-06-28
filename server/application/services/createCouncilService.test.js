@@ -90,3 +90,50 @@ test("thread creation and reply message persistence work through events", async 
   assert.equal(loadedThread.thread.messages.length, 2);
   assert.equal(loadedThread.thread.messages[1].replyTo.text, "문의 내용");
 });
+
+test("thread summaries and message pagination avoid loading full history", async () => {
+  const service = await createTestService();
+
+  await service.signupStudent({
+    studentId: "1234",
+    name: "홍길동",
+    pin: "1111",
+    email: "student@example.com",
+  });
+
+  const created = await service.createThread({
+    studentId: "1234",
+    name: "홍길동",
+    pin: "1111",
+    title: "성능 문의",
+    content: "첫 문의",
+  });
+
+  for (let index = 0; index < 5; index += 1) {
+    await service.addMessage(created.thread.id, {
+      author: index % 2 === 0 ? "admin" : "student",
+      authorLabel: "학생회",
+      clientMessageId: `client-msg-${index + 10}`,
+      name: "홍길동",
+      pin: "1111",
+      studentId: "1234",
+      text: `메시지 ${index + 1}`,
+    });
+  }
+
+  const summaries = await service.listThreadSummaries();
+  assert.equal(summaries.threads[0].messageCount, 6);
+  assert.equal(summaries.threads[0].latestMessage.text, "메시지 5");
+  assert.equal("messages" in summaries.threads[0], false);
+
+  const firstPage = await service.getThreadMessages(created.thread.id, { limit: 3 });
+  assert.equal(firstPage.messages.length, 3);
+  assert.equal(firstPage.hasMore, true);
+
+  const secondPage = await service.getThreadMessages(created.thread.id, {
+    before: firstPage.nextCursor,
+    limit: 3,
+  });
+  assert.equal(secondPage.messages.length, 3);
+  assert.equal(secondPage.hasMore, false);
+});

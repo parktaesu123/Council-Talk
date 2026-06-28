@@ -53,8 +53,21 @@ export const createHttpApp = ({ runtime }) => {
     response.json(await runtime.service.listThreads());
   }));
 
+  app.get("/api/thread-summaries", createRouteHandler(async (_request, response) => {
+    response.json(await runtime.service.listThreadSummaries());
+  }));
+
   app.get("/api/threads/:id", createRouteHandler(async (request, response) => {
     response.json(await runtime.service.getThread(request.params.id));
+  }));
+
+  app.get("/api/threads/:id/messages", createRouteHandler(async (request, response) => {
+    response.json(
+      await runtime.service.getThreadMessages(request.params.id, {
+        before: request.query.before,
+        limit: request.query.limit,
+      }),
+    );
   }));
 
   app.post("/api/threads/:id/typing", createRouteHandler(async (request, response) => {
