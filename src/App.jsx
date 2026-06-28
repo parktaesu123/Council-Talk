@@ -90,6 +90,33 @@ const normalizeStatus = (status) => {
 const normalizeTags = (tags) => (Array.isArray(tags) ? tags : []);
 const normalizeThread = (thread) => ({ ...thread, status: normalizeStatus(thread.status) });
 const normalizeThreads = (threads) => (Array.isArray(threads) ? threads.map(normalizeThread) : []);
+const getLatestMessagePreview = (thread) =>
+  thread?.latestMessage ||
+  (thread?.messages?.length
+    ? {
+        id: thread.messages.at(-1).id,
+        author: thread.messages.at(-1).author,
+        authorLabel: thread.messages.at(-1).authorLabel,
+        text: thread.messages.at(-1).text,
+        time: thread.messages.at(-1).time,
+        createdAt: thread.messages.at(-1).createdAt,
+      }
+    : null);
+const toThreadSummary = (thread) =>
+  normalizeThread({
+    id: thread.id,
+    studentId: thread.studentId,
+    name: thread.name,
+    title: thread.title,
+    tagId: thread.tagId || "",
+    tagName: thread.tagName || "",
+    status: thread.status,
+    createdAt: thread.createdAt,
+    updatedAt: thread.updatedAt,
+    messageCount: thread.messageCount ?? thread.messages?.length ?? 0,
+    latestMessage: getLatestMessagePreview(thread),
+  });
+const toThreadSummaries = (threads) => (Array.isArray(threads) ? threads.map(toThreadSummary) : []);
 const messageSignature = (threadId, text) => `${threadId}:${String(text || "").trim()}`;
 const createReplyTarget = (message) => ({
   id: message.id,
@@ -97,7 +124,7 @@ const createReplyTarget = (message) => ({
   text: String(message.text || ""),
 });
 const mergeThreadList = (threads, nextThread) => {
-  const normalized = normalizeThread(nextThread);
+  const normalized = toThreadSummary(nextThread);
   const index = threads.findIndex((thread) => thread.id === normalized.id);
 
   if (index < 0) {
@@ -142,6 +169,14 @@ function App() {
   const [notificationEmails, setNotificationEmails] = useState([]);
   const [mailStatus, setMailStatus] = useState({ configured: false, missing: [] });
   const [isSupportOpen, setIsSupportOpen] = useState(false);
+  const [currentThreadDetail, setCurrentThreadDetail] = useState(null);
+  const [currentThreadHasMore, setCurrentThreadHasMore] = useState(false);
+  const [currentThreadNextCursor, setCurrentThreadNextCursor] = useState(null);
+  const [isCurrentThreadLoading, setIsCurrentThreadLoading] = useState(false);
+  const [selectedThreadDetail, setSelectedThreadDetail] = useState(null);
+  const [selectedThreadHasMore, setSelectedThreadHasMore] = useState(false);
+  const [selectedThreadNextCursor, setSelectedThreadNextCursor] = useState(null);
+  const [isSelectedThreadLoading, setIsSelectedThreadLoading] = useState(false);
   const [form, setForm] = useState(emptyForm);
   const [profileChangeForm, setProfileChangeForm] = useState(emptyProfileChangeForm);
   const [profileChangeMessage, setProfileChangeMessage] = useState("");
@@ -361,6 +396,84 @@ function App() {
   }, [adminAuthed, isAdminRoute]);
 
   useEffect(() => {
+    if (!studentProfile || supportView !== "chat" || !currentThreadId) {
+      return;
+    }
+
+    const summary = threads.find((thread) => thread.id === currentThreadId);
+    if (!summary) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsCurrentThreadLoading(true);
+    loadThreadMessages(currentThreadId)
+      .then((data) => {
+        if (cancelled) {
+          return;
+        }
+        setCurrentThreadDetail(buildThreadDetail(summary, data));
+        setCurrentThreadHasMore(Boolean(data.hasMore));
+        setCurrentThreadNextCursor(data.nextCursor || null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setCurrentThreadDetail((current) => (current?.id === currentThreadId ? current : summary));
+          setCurrentThreadHasMore(false);
+          setCurrentThreadNextCursor(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsCurrentThreadLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [currentThreadId, studentProfile, supportView, threads]);
+
+  useEffect(() => {
+    if (!adminAuthed || !isAdminRoute || !selectedThreadId) {
+      return;
+    }
+
+    const summary = threads.find((thread) => thread.id === selectedThreadId);
+    if (!summary) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsSelectedThreadLoading(true);
+    loadThreadMessages(selectedThreadId)
+      .then((data) => {
+        if (cancelled) {
+          return;
+        }
+        setSelectedThreadDetail(buildThreadDetail(summary, data));
+        setSelectedThreadHasMore(Boolean(data.hasMore));
+        setSelectedThreadNextCursor(data.nextCursor || null);
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setSelectedThreadDetail((current) => (current?.id === selectedThreadId ? current : summary));
+          setSelectedThreadHasMore(false);
+          setSelectedThreadNextCursor(null);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsSelectedThreadLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [adminAuthed, isAdminRoute, selectedThreadId, threads]);
+
+  useEffect(() => {
     if (!adminAuthed || !isAdminRoute || !selectedThreadId) {
       return undefined;
     }
@@ -523,8 +636,16 @@ function App() {
     }
   }, [adminFilter, adminSection, adminTagFilter, isAdminRoute, route, selectedThreadId, threads]);
 
-  const currentThread = threads.find((thread) => thread.id === currentThreadId);
-  const selectedThread = threads.find((thread) => thread.id === selectedThreadId);
+  const currentThreadSummary = threads.find((thread) => thread.id === currentThreadId);
+  const selectedThreadSummary = threads.find((thread) => thread.id === selectedThreadId);
+  const currentThread =
+    currentThreadDetail?.id === currentThreadId
+      ? currentThreadDetail
+      : currentThreadSummary;
+  const selectedThread =
+    selectedThreadDetail?.id === selectedThreadId
+      ? selectedThreadDetail
+      : selectedThreadSummary;
   const selectedStudent = students.find((student) => studentKey(student) === selectedStudentKey);
   const studentThreads = studentProfile
     ? threads.filter(
@@ -542,18 +663,18 @@ function App() {
       return statusMatches && tagMatches;
     });
   const typingThreadIds = new Set(adminTyping.map((item) => item.threadId));
-  const selectedThreadTyping = selectedThread
-    ? adminTyping.filter((item) => item.threadId === selectedThread.id)
+  const selectedThreadTyping = selectedThreadSummary
+    ? adminTyping.filter((item) => item.threadId === selectedThreadSummary.id)
     : [];
   
   useEffect(() => {
-    if (studentReplyTarget && !currentThread?.messages.some((message) => message.id === studentReplyTarget.id)) {
+    if (studentReplyTarget && !currentThread?.messages?.some((message) => message.id === studentReplyTarget.id)) {
       setStudentReplyTarget(null);
     }
   }, [currentThread, studentReplyTarget]);
 
   useEffect(() => {
-    if (adminReplyTarget && !selectedThread?.messages.some((message) => message.id === adminReplyTarget.id)) {
+    if (adminReplyTarget && !selectedThread?.messages?.some((message) => message.id === adminReplyTarget.id)) {
       setAdminReplyTarget(null);
     }
   }, [adminReplyTarget, selectedThread]);
@@ -594,17 +715,37 @@ function App() {
     });
   };
 
+  const buildThreadDetail = (summary, payload) => ({
+    ...(summary || {}),
+    id: summary?.id || payload?.thread?.id,
+    messageCount: payload?.thread?.messageCount ?? summary?.messageCount ?? payload?.messages?.length ?? 0,
+    messages: payload?.messages || [],
+    updatedAt: payload?.thread?.updatedAt || summary?.updatedAt || "",
+  });
+
+  const loadThreadMessages = async (threadId, before, limit = 30) =>
+    apiRequest(
+      `/api/threads/${threadId}/messages?${new URLSearchParams(
+        Object.fromEntries(
+          Object.entries({
+            before,
+            limit: String(limit),
+          }).filter(([, value]) => Boolean(value)),
+        ),
+      ).toString()}`,
+    );
+
   const loadAdminData = async () => {
     try {
       const [threadData, tagData, studentData, requestData, emailData, mailData] = await Promise.all([
-        apiRequest("/api/threads"),
+        apiRequest("/api/thread-summaries"),
         apiRequest("/api/tags"),
         apiRequest("/api/students"),
         apiRequest("/api/profile-requests"),
         apiRequest("/api/notification-emails"),
         apiRequest("/api/mail-status"),
       ]);
-      const nextThreads = threadData.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) }));
+      const nextThreads = toThreadSummaries(threadData.threads);
       setThreads(nextThreads);
       setTags(normalizeTags(tagData.tags));
       setStudents(studentData.students || []);
@@ -624,7 +765,7 @@ function App() {
   const completeStudentAuth = (profile, data) => {
     const nextProfile = { ...profile, ...data.profile };
     setStudentProfile(nextProfile);
-    setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+    setThreads(toThreadSummaries(data.threads));
     apiRequest("/api/tags")
       .then((tagData) => setTags(normalizeTags(tagData.tags)))
       .catch(() => {});
@@ -826,7 +967,10 @@ function App() {
         body: JSON.stringify(payload),
       });
       thread = data.thread;
-      setThreads(data.threads.map((item) => ({ ...item, status: normalizeStatus(item.status) })));
+      setThreads((current) => mergeThreadList(current, thread));
+      setCurrentThreadDetail(thread);
+      setCurrentThreadHasMore(false);
+      setCurrentThreadNextCursor(null);
     } catch {
       setCreateThreadError("문의방을 만들지 못했습니다. 잠시 후 다시 시도해주세요.");
       setIsCreatingThread(false);
@@ -880,7 +1024,10 @@ function App() {
           replyTo: studentReplyTarget,
         }),
       });
-      setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+      setThreads((current) => mergeThreadList(current, data.thread));
+      setCurrentThreadDetail(data.thread);
+      setCurrentThreadHasMore(false);
+      setCurrentThreadNextCursor(null);
       setStudentReplyTarget(null);
     } catch {
       lastStudentSendRef.current = "";
@@ -945,7 +1092,10 @@ function App() {
           replyTo: adminReplyTarget,
         }),
       });
-      setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+      setThreads((current) => mergeThreadList(current, data.thread));
+      setSelectedThreadDetail(data.thread);
+      setSelectedThreadHasMore(false);
+      setSelectedThreadNextCursor(null);
       setAdminReplyTarget(null);
       fetch(`/api/threads/${selectedThread.id}/typing`, {
         method: "POST",
@@ -998,6 +1148,54 @@ function App() {
     adminComposeRef.current?.focus();
   };
 
+  const handleLoadOlderStudentMessages = async () => {
+    if (!currentThreadId || !currentThreadNextCursor || isCurrentThreadLoading) {
+      return;
+    }
+
+    try {
+      setIsCurrentThreadLoading(true);
+      const data = await loadThreadMessages(currentThreadId, currentThreadNextCursor);
+      setCurrentThreadDetail((current) =>
+        current
+          ? {
+              ...current,
+              messageCount: data.thread?.messageCount ?? current.messageCount,
+              messages: [...(data.messages || []), ...(current.messages || [])],
+            }
+          : current,
+      );
+      setCurrentThreadHasMore(Boolean(data.hasMore));
+      setCurrentThreadNextCursor(data.nextCursor || null);
+    } finally {
+      setIsCurrentThreadLoading(false);
+    }
+  };
+
+  const handleLoadOlderAdminMessages = async () => {
+    if (!selectedThreadId || !selectedThreadNextCursor || isSelectedThreadLoading) {
+      return;
+    }
+
+    try {
+      setIsSelectedThreadLoading(true);
+      const data = await loadThreadMessages(selectedThreadId, selectedThreadNextCursor);
+      setSelectedThreadDetail((current) =>
+        current
+          ? {
+              ...current,
+              messageCount: data.thread?.messageCount ?? current.messageCount,
+              messages: [...(data.messages || []), ...(current.messages || [])],
+            }
+          : current,
+      );
+      setSelectedThreadHasMore(Boolean(data.hasMore));
+      setSelectedThreadNextCursor(data.nextCursor || null);
+    } finally {
+      setIsSelectedThreadLoading(false);
+    }
+  };
+
   const getMessagePayload = (author, extra = {}) =>
     author === "student"
       ? {
@@ -1021,7 +1219,12 @@ function App() {
         method: "PATCH",
         body: JSON.stringify(getMessagePayload(author, { text })),
       });
-      setThreads(data.threads.map((item) => ({ ...item, status: normalizeStatus(item.status) })));
+      setThreads((current) => mergeThreadList(current, data.thread));
+      if (author === "student") {
+        setCurrentThreadDetail(data.thread);
+      } else {
+        setSelectedThreadDetail(data.thread);
+      }
     } catch {
       saveThreadsFallback((current) =>
         current.map((item) =>
@@ -1046,7 +1249,12 @@ function App() {
         method: "DELETE",
         body: JSON.stringify(getMessagePayload(author)),
       });
-      setThreads(data.threads.map((item) => ({ ...item, status: normalizeStatus(item.status) })));
+      setThreads((current) => mergeThreadList(current, data.thread));
+      if (author === "student") {
+        setCurrentThreadDetail(data.thread);
+      } else {
+        setSelectedThreadDetail(data.thread);
+      }
     } catch {
       saveThreadsFallback((current) =>
         current.map((item) =>
@@ -1152,7 +1360,10 @@ function App() {
           message: adminStudentMessage.trim(),
         }),
       });
-      setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+      setThreads((current) => mergeThreadList(current, data.thread));
+      setSelectedThreadDetail(data.thread);
+      setSelectedThreadHasMore(false);
+      setSelectedThreadNextCursor(null);
       setSelectedThreadId(data.thread.id);
       navigateTo(getAdminThreadPath(data.thread.id));
       setAdminStudentMessage("");
@@ -1231,7 +1442,10 @@ function App() {
           pin: studentProfile?.pin,
         }),
       });
-      setThreads(data.threads.map((item) => ({ ...item, status: normalizeStatus(item.status) })));
+      setThreads((current) => mergeThreadList(current, data.thread));
+      setCurrentThreadDetail((current) =>
+        current?.id === data.thread.id ? { ...current, status: data.thread.status } : current,
+      );
     } catch {
       saveThreadsFallback((current) =>
         current.map((item) =>
@@ -1260,7 +1474,10 @@ function App() {
         method: "PATCH",
         body: JSON.stringify({ status }),
       });
-      setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+      setThreads((current) => mergeThreadList(current, data.thread));
+      setSelectedThreadDetail((current) =>
+        current?.id === data.thread.id ? { ...current, status: data.thread.status } : current,
+      );
     } catch {
       saveThreadsFallback((current) =>
         current.map((thread) =>
@@ -1292,6 +1509,7 @@ function App() {
           handleAdminReply={handleAdminReply}
           handleAdminStatusChange={handleAdminStatusChange}
           handleAdminReplyStart={handleAdminReplyStart}
+          handleLoadOlderMessages={handleLoadOlderAdminMessages}
           handleCreateStudentChat={handleCreateStudentChat}
           onOpenBanDialog={openBanDialog}
           onUnban={confirmUnban}
@@ -1306,6 +1524,7 @@ function App() {
           editingText={editingText}
           activeMessageMenuId={activeMessageMenuId}
           isAdminSending={isAdminSending}
+          isLoadingMessages={isSelectedThreadLoading}
           pendingProfileRequests={pendingProfileRequests}
           mailStatus={mailStatus}
           notificationEmail={notificationEmail}
@@ -1317,6 +1536,7 @@ function App() {
           selectedThreadId={selectedThreadId}
           selectedStudent={selectedStudent}
           selectedStudentKey={selectedStudentKey}
+          hasMoreMessages={selectedThreadHasMore}
           adminComposeRef={adminComposeRef}
           setAdminFilter={setAdminFilter}
           setAdminName={setAdminName}
@@ -1442,9 +1662,11 @@ function App() {
           handleMessageEditStart={handleMessageEditStart}
           handleMessageUpdate={handleMessageUpdate}
           handleStudentReplyStart={handleStudentReplyStart}
+          handleLoadOlderMessages={handleLoadOlderStudentMessages}
           activeMessageMenuId={activeMessageMenuId}
           onRequestReopenThread={confirmReopenThread}
           handleStudentSend={handleStudentSend}
+          isLoadingMessages={isCurrentThreadLoading}
           isStudentSending={isStudentSending}
           navigateTo={navigateTo}
           resetStudentProfile={resetStudentProfile}
@@ -1462,6 +1684,7 @@ function App() {
           studentThreads={studentThreads}
           studentMessage={studentMessage}
           studentComposeRef={studentComposeRef}
+          hasMoreMessages={currentThreadHasMore}
           supportView={supportView}
           tags={tags}
         />
@@ -1844,6 +2067,7 @@ function SupportPanel({
   editingMessageId,
   editingText,
   activeMessageMenuId,
+  handleLoadOlderMessages,
   handleStudentReplyStart,
   form,
   handleCreateThread,
@@ -1852,6 +2076,8 @@ function SupportPanel({
   handleMessageEditStart,
   handleMessageUpdate,
   handleStudentSend,
+  hasMoreMessages,
+  isLoadingMessages,
   isCreatingThread,
   isStudentSending,
   navigateTo,
@@ -1950,7 +2176,7 @@ function SupportPanel({
                 type="button"
               >
                 <strong>{thread.title}</strong>
-                <span>{thread.messages.at(-1)?.text || "문의 내용 없음"}</span>
+                <span>{thread.latestMessage?.text || "문의 내용 없음"}</span>
                 <small>{thread.status}</small>
               </button>
             ))}
@@ -2059,7 +2285,17 @@ function SupportPanel({
           )}
 
           <div className="messages">
-            {currentThread.messages.map((message) => (
+            {hasMoreMessages && (
+              <button
+                className="load-more-messages"
+                disabled={isLoadingMessages}
+                onClick={handleLoadOlderMessages}
+                type="button"
+              >
+                {isLoadingMessages ? "이전 메시지 불러오는 중..." : "이전 메시지 더 보기"}
+              </button>
+            )}
+            {(currentThread.messages || []).map((message) => (
               <MessageBubble
                 actor="student"
                 canManage={!isBanned}
@@ -2528,6 +2764,7 @@ function AdminScreen({
   handleAddNotificationEmail,
   handleCreateTag,
   handleAdminLogin,
+  handleLoadOlderMessages,
   handleAdminReply,
   handleAdminReplyStart,
   handleAdminStatusChange,
@@ -2541,10 +2778,12 @@ function AdminScreen({
   handleMessageUpdate,
   handleDeleteNotificationEmail,
   handleProfileRequestReview,
+  hasMoreMessages,
   editingMessageId,
   editingText,
   activeMessageMenuId,
   isAdminSending,
+  isLoadingMessages,
   navigateTo,
   onRequestDeleteTag,
   pendingProfileRequests,
@@ -2751,7 +2990,7 @@ function AdminScreen({
                     "thread-item",
                     thread.id === selectedThreadId ? "active" : "",
                     typingThreadIds.has(thread.id) ? "typing" : "",
-                    thread.messages.at(-1)?.author === "admin" ? "recent-admin" : "",
+                    thread.latestMessage?.author === "admin" ? "recent-admin" : "",
                   ]
                     .filter(Boolean)
                     .join(" ")}
@@ -2767,7 +3006,7 @@ function AdminScreen({
                   <small>
                     {typingThreadIds.has(thread.id)
                       ? "답변 작성 중"
-                      : thread.messages.at(-1)?.author === "admin"
+                      : thread.latestMessage?.author === "admin"
                         ? "최근 답변됨"
                         : normalizeStatus(thread.status)}
                   </small>
@@ -2895,7 +3134,17 @@ function AdminScreen({
             )}
 
             <div className="messages admin-messages">
-              {selectedThread.messages.map((message) => (
+              {hasMoreMessages && (
+                <button
+                  className="load-more-messages"
+                  disabled={isLoadingMessages}
+                  onClick={handleLoadOlderMessages}
+                  type="button"
+                >
+                  {isLoadingMessages ? "이전 메시지 불러오는 중..." : "이전 메시지 더 보기"}
+                </button>
+              )}
+              {(selectedThread.messages || []).map((message) => (
                 <MessageBubble
                   actor="admin"
                   activeMessageMenuId={activeMessageMenuId}
