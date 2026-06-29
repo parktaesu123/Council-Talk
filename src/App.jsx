@@ -7,11 +7,13 @@ import {
   Plus,
   Reply,
   Send,
+  Smile,
   Trash2,
   UserRound,
   X,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import EmojiPicker from "./components/EmojiPicker.jsx";
 
 const STORAGE_KEY = "council-talk-threads";
 const STATUS_LABELS = ["미완료", "진행중", "완료"];
@@ -128,6 +130,29 @@ const replaceOptimisticMessage = (messages, clientMessageId, nextMessage) =>
       ? nextMessage
       : message,
   );
+const mergeRealtimeMessageIntoDetail = (detail, message, threadSummary) => {
+  if (!detail || !message) {
+    return detail;
+  }
+
+  const existingIndex = (detail.messages || []).findIndex(
+    (item) => item.id === message.id || item.clientMessageId === message.clientMessageId,
+  );
+
+  if (existingIndex >= 0) {
+    return {
+      ...detail,
+      ...threadSummary,
+      messages: replaceOptimisticMessage(detail.messages, message.clientMessageId || message.id, message),
+    };
+  }
+
+  return {
+    ...detail,
+    ...threadSummary,
+    messages: [...(detail.messages || []), message],
+  };
+};
 const mergeThreadList = (threads, nextThread) => {
   const normalized = toThreadSummary(nextThread);
   const index = threads.findIndex((thread) => thread.id === normalized.id);
@@ -236,6 +261,10 @@ function App() {
   const [adminFilter, setAdminFilter] = useState("all");
   const [adminTagFilter, setAdminTagFilter] = useState("all");
   const [adminTyping, setAdminTyping] = useState([]);
+  const [emojiPickerTarget, setEmojiPickerTarget] = useState(null);
+  const [emojiQuery, setEmojiQuery] = useState("");
+  const [emojiResults, setEmojiResults] = useState([]);
+  const [isEmojiLoading, setIsEmojiLoading] = useState(false);
   const [realtimeStatus, setRealtimeStatus] = useState("idle");
   const [adminSection, setAdminSection] = useState(() => getAdminSectionFromPath(window.location.pathname));
   const [selectedStudentKey, setSelectedStudentKey] = useState("");
@@ -333,7 +362,10 @@ function App() {
   }, [adminAuthed, isAdminRoute]);
 
   useEffect(() => {
-    if (!adminAuthed || !isAdminRoute) {
+    const shouldConnect =
+      (adminAuthed && isAdminRoute) || (!isAdminRoute && Boolean(studentProfile));
+
+    if (!shouldConnect) {
       return undefined;
     }
 
@@ -349,7 +381,11 @@ function App() {
         const data = JSON.parse(event.data);
         setThreads(toThreadSummaries(data.threads));
       } catch {
-        loadAdminData();
+        if (adminAuthed && isAdminRoute) {
+          loadAdminData();
+        } else {
+          refreshStudentSession().catch(() => {});
+        }
       }
     });
 
@@ -360,7 +396,38 @@ function App() {
           setThreads((current) => mergeThreadList(current, data.thread));
         }
       } catch {
-        loadAdminData();
+        if (adminAuthed && isAdminRoute) {
+          loadAdminData();
+        } else {
+          refreshStudentSession().catch(() => {});
+        }
+      }
+    });
+
+    events.addEventListener("thread-message", (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (!data.thread || !data.message) {
+          return;
+        }
+
+        setThreads((current) => mergeThreadList(current, data.thread));
+        setCurrentThreadDetail((current) =>
+          current?.id === data.threadId
+            ? mergeRealtimeMessageIntoDetail(current, data.message, data.thread)
+            : current,
+        );
+        setSelectedThreadDetail((current) =>
+          current?.id === data.threadId
+            ? mergeRealtimeMessageIntoDetail(current, data.message, data.thread)
+            : current,
+        );
+      } catch {
+        if (adminAuthed && isAdminRoute) {
+          loadAdminData();
+        } else {
+          refreshStudentSession().catch(() => {});
+        }
       }
     });
 
@@ -382,7 +449,11 @@ function App() {
       }
 
       adminSyncFallbackRef.current = setTimeout(() => {
-        loadAdminData();
+        if (adminAuthed && isAdminRoute) {
+          loadAdminData();
+        } else {
+          refreshStudentSession().catch(() => {});
+        }
         adminSyncFallbackRef.current = null;
       }, 4000);
     };
@@ -395,7 +466,39 @@ function App() {
       events.close();
       setRealtimeStatus("idle");
     };
-  }, [adminAuthed, isAdminRoute]);
+  }, [adminAuthed, isAdminRoute, studentProfile]);
+
+  useEffect(() => {
+    if (!emojiPickerTarget) {
+      return;
+    }
+
+    let cancelled = false;
+    setIsEmojiLoading(true);
+    apiRequest(`/api/emojis?${new URLSearchParams({
+      limit: "120",
+      ...(emojiQuery.trim() ? { q: emojiQuery.trim() } : {}),
+    }).toString()}`)
+      .then((data) => {
+        if (!cancelled) {
+          setEmojiResults(data.emojis || []);
+        }
+      })
+      .catch(() => {
+        if (!cancelled) {
+          setEmojiResults([]);
+        }
+      })
+      .finally(() => {
+        if (!cancelled) {
+          setIsEmojiLoading(false);
+        }
+      });
+
+    return () => {
+      cancelled = true;
+    };
+  }, [emojiPickerTarget, emojiQuery]);
 
   useEffect(() => {
     if (!studentProfile || supportView !== "chat" || !currentThreadId) {
@@ -758,6 +861,19 @@ function App() {
     } catch {
       setThreads(loadThreads());
     }
+  };
+
+  const refreshStudentSession = async (profile = studentProfile) => {
+    if (!profile) {
+      return;
+    }
+
+    const data = await apiRequest("/api/students/session", {
+      method: "POST",
+      body: JSON.stringify(profile),
+    });
+    setThreads(toThreadSummaries(data.threads));
+    setStudentProfile((current) => (current ? { ...current, ...data.profile } : current));
   };
 
   const completeStudentAuth = (profile, data) => {
@@ -1280,6 +1396,25 @@ function App() {
     adminComposeRef.current?.focus();
   };
 
+  const handleEmojiPick = (emoji) => {
+    if (!emoji?.emoji) {
+      return;
+    }
+
+    if (emojiPickerTarget === "student") {
+      setStudentMessage((current) => `${current}${emoji.emoji}`);
+      studentComposeRef.current?.focus();
+    }
+
+    if (emojiPickerTarget === "admin") {
+      handleAdminReplyChange(`${adminReply}${emoji.emoji}`);
+      adminComposeRef.current?.focus();
+    }
+
+    setEmojiPickerTarget(null);
+    setEmojiQuery("");
+  };
+
   const handleLoadOlderStudentMessages = async () => {
     if (!currentThreadId || !currentThreadNextCursor || isCurrentThreadLoading) {
       return;
@@ -1610,6 +1745,7 @@ function App() {
           handleAdminStatusChange={handleAdminStatusChange}
           handleAdminReplyStart={handleAdminReplyStart}
           handleLoadOlderMessages={handleLoadOlderAdminMessages}
+          handleEmojiPick={handleEmojiPick}
           handleCreateStudentChat={handleCreateStudentChat}
           onOpenBanDialog={openBanDialog}
           onUnban={confirmUnban}
@@ -1623,10 +1759,14 @@ function App() {
           editingText={editingText}
           activeMessageMenuId={activeMessageMenuId}
           isAdminSending={isAdminSending}
+          isEmojiLoading={isEmojiLoading}
           isLoadingMessages={isSelectedThreadLoading}
           pendingProfileRequests={pendingProfileRequests}
           navigateTo={navigateTo}
           realtimeStatus={realtimeStatus}
+          emojiPickerTarget={emojiPickerTarget}
+          emojiQuery={emojiQuery}
+          emojiResults={emojiResults}
           selectedThreadTyping={selectedThreadTyping}
           selectedThread={selectedThread}
           selectedThreadId={selectedThreadId}
@@ -1644,6 +1784,8 @@ function App() {
           setAdminStudentMessage={setAdminStudentMessage}
           setActiveMessageMenuId={setActiveMessageMenuId}
           setEditingText={setEditingText}
+          setEmojiPickerTarget={setEmojiPickerTarget}
+          setEmojiQuery={setEmojiQuery}
           setSelectedThreadId={setSelectedThreadId}
           setSelectedStudentKey={setSelectedStudentKey}
           setTagName={setTagName}
@@ -1758,9 +1900,14 @@ function App() {
           handleMessageUpdate={handleMessageUpdate}
           handleStudentReplyStart={handleStudentReplyStart}
           handleLoadOlderMessages={handleLoadOlderStudentMessages}
+          handleEmojiPick={handleEmojiPick}
           activeMessageMenuId={activeMessageMenuId}
           onRequestReopenThread={confirmReopenThread}
+          emojiPickerTarget={emojiPickerTarget}
+          emojiQuery={emojiQuery}
+          emojiResults={emojiResults}
           handleStudentSend={handleStudentSend}
+          isEmojiLoading={isEmojiLoading}
           isLoadingMessages={isCurrentThreadLoading}
           isStudentSending={isStudentSending}
           navigateTo={navigateTo}
@@ -1771,6 +1918,8 @@ function App() {
           setForm={setForm}
           setIsSupportOpen={closeSupport}
           setSupportView={setSupportView}
+          setEmojiPickerTarget={setEmojiPickerTarget}
+          setEmojiQuery={setEmojiQuery}
           setStudentMessage={handleStudentMessageChange}
           setStudentReplyTarget={setStudentReplyTarget}
           isCreatingThread={isCreatingThread}
@@ -2160,8 +2309,12 @@ function SupportPanel({
   createThreadError,
   currentThread,
   editingMessageId,
+  emojiPickerTarget,
+  emojiQuery,
+  emojiResults,
   editingText,
   activeMessageMenuId,
+  handleEmojiPick,
   handleLoadOlderMessages,
   handleStudentReplyStart,
   form,
@@ -2172,6 +2325,7 @@ function SupportPanel({
   handleMessageUpdate,
   handleStudentSend,
   hasMoreMessages,
+  isEmojiLoading,
   isLoadingMessages,
   isCreatingThread,
   isStudentSending,
@@ -2181,6 +2335,8 @@ function SupportPanel({
   setActiveMessageMenuId,
   setCurrentThreadId,
   setEditingText,
+  setEmojiPickerTarget,
+  setEmojiQuery,
   setForm,
   setIsSupportOpen,
   setSupportView,
@@ -2426,9 +2582,26 @@ function SupportPanel({
                   onClear={() => setStudentReplyTarget(null)}
                 />
               )}
-              <button aria-label="첨부" className="plus-button" type="button">
-                +
+              <button
+                aria-label="이모지"
+                className="plus-button"
+                onClick={() => {
+                  setEmojiQuery("");
+                  setEmojiPickerTarget(emojiPickerTarget === "student" ? null : "student");
+                }}
+                type="button"
+              >
+                <Smile size={18} />
               </button>
+              {emojiPickerTarget === "student" && (
+                <EmojiPicker
+                  emojis={emojiResults}
+                  isLoading={isEmojiLoading}
+                  onPick={handleEmojiPick}
+                  onQueryChange={setEmojiQuery}
+                  query={emojiQuery}
+                />
+              )}
               <textarea
                 ref={studentComposeRef}
                 value={studentMessage}
@@ -2690,12 +2863,23 @@ function MessageBubble({
   const isMenuOpen = activeMessageMenuId === message.id;
 
   return (
-    <article className={`bubble ${message.author}`} key={message.id}>
+    <article
+      className={`bubble ${message.author} ${onReply && !isEditing ? "replyable" : ""}`}
+      key={message.id}
+      onClick={() => {
+        if (!isEditing && onReply) {
+          onReply();
+        }
+      }}
+    >
       {!isEditing && onReply && (
         <button
           aria-label="답장"
           className={`message-reply-trigger ${isOwnMessage && canManage ? "with-menu" : ""}`}
-          onClick={onReply}
+          onClick={(event) => {
+            event.stopPropagation();
+            onReply();
+          }}
           type="button"
         >
           <Reply size={14} />
@@ -2706,15 +2890,19 @@ function MessageBubble({
           <button
             aria-label="메시지 옵션"
             className="message-menu-trigger"
-            onClick={() => setActiveMessageMenuId(isMenuOpen ? null : message.id)}
+            onClick={(event) => {
+              event.stopPropagation();
+              setActiveMessageMenuId(isMenuOpen ? null : message.id);
+            }}
             type="button"
           >
             <Pencil size={14} />
           </button>
           {isMenuOpen && (
-            <div className="message-menu">
+            <div className="message-menu" onClick={(event) => event.stopPropagation()}>
               <button
-                onClick={() => {
+                onClick={(event) => {
+                  event.stopPropagation();
                   setActiveMessageMenuId(null);
                   onStartEdit();
                 }}
@@ -2723,7 +2911,8 @@ function MessageBubble({
                 수정
               </button>
               <button
-                onClick={() => {
+                onClick={(event) => {
+                  event.stopPropagation();
                   setActiveMessageMenuId(null);
                   onDelete();
                 }}
@@ -2749,6 +2938,7 @@ function MessageBubble({
             autoFocus
             value={editingText}
             onChange={(event) => onChangeEdit(event.target.value)}
+            onClick={(event) => event.stopPropagation()}
             onKeyDown={(event) => {
               if (event.key === "Enter" && !event.shiftKey) {
                 event.preventDefault();
@@ -2762,10 +2952,22 @@ function MessageBubble({
             rows={3}
           />
           <div>
-            <button onClick={onCancelEdit} type="button">
+            <button
+              onClick={(event) => {
+                event.stopPropagation();
+                onCancelEdit();
+              }}
+              type="button"
+            >
               취소
             </button>
-            <button onClick={onSaveEdit} type="button">
+            <button
+              onClick={(event) => {
+                event.stopPropagation();
+                onSaveEdit();
+              }}
+              type="button"
+            >
               저장
             </button>
           </div>
@@ -2797,8 +2999,12 @@ function AdminScreen({
   adminSection,
   adminTagFilter,
   adminStudentMessage,
+  emojiPickerTarget,
+  emojiQuery,
+  emojiResults,
   handleCreateTag,
   handleAdminLogin,
+  handleEmojiPick,
   handleLoadOlderMessages,
   handleAdminReply,
   handleAdminReplyStart,
@@ -2817,6 +3023,7 @@ function AdminScreen({
   editingText,
   activeMessageMenuId,
   isAdminSending,
+  isEmojiLoading,
   isLoadingMessages,
   navigateTo,
   onRequestDeleteTag,
@@ -2837,6 +3044,8 @@ function AdminScreen({
   setAdminStudentMessage,
   setActiveMessageMenuId,
   setEditingText,
+  setEmojiPickerTarget,
+  setEmojiQuery,
   setSelectedThreadId,
   setSelectedStudentKey,
   setTagName,
@@ -3182,6 +3391,15 @@ function AdminScreen({
                   onClear={() => setAdminReplyTarget(null)}
                 />
               )}
+              {emojiPickerTarget === "admin" && (
+                <EmojiPicker
+                  emojis={emojiResults}
+                  isLoading={isEmojiLoading}
+                  onPick={handleEmojiPick}
+                  onQueryChange={setEmojiQuery}
+                  query={emojiQuery}
+                />
+              )}
               <textarea
                 ref={adminComposeRef}
                 value={adminReply}
@@ -3198,6 +3416,17 @@ function AdminScreen({
                 placeholder={`${adminName || "학생회"} 이름으로 답변하기`}
                 rows={4}
               />
+              <button
+                aria-label="이모지"
+                className="plus-button admin-emoji-button"
+                onClick={() => {
+                  setEmojiQuery("");
+                  setEmojiPickerTarget(emojiPickerTarget === "admin" ? null : "admin");
+                }}
+                type="button"
+              >
+                <Smile size={18} />
+              </button>
               <button
                 aria-label="답변 보내기"
                 className="black-icon-button"
