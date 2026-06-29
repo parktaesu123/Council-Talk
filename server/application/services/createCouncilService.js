@@ -4,6 +4,7 @@ import {
   notFound,
   unauthorized,
 } from "../errors.js";
+import { createStudentRegisteredEventBuilder } from "./councilService/createStudentRegisteredEventBuilder.js";
 import { createStudentProfileSupport } from "./councilService/createStudentProfileSupport.js";
 import { createDomainEvent } from "../../domain/shared/domainEvent.js";
 import {
@@ -42,20 +43,9 @@ export const createCouncilService = ({
     clock,
     hashPin,
   });
-
-  const buildStudentRegisteredEvent = (payload) =>
-    createDomainEvent({
-      type: "student.registered",
-      payload: {
-        student: {
-          ...payload.profile,
-          email: normalizeEmail(payload.email),
-          pinHash: hashPin(payload.pin),
-          createdAt: payload.now,
-          updatedAt: payload.now,
-        },
-      },
-    });
+  const { buildStudentRegisteredEvent } = createStudentRegisteredEventBuilder({
+    hashPin,
+  });
 
   return {
     async getState() {
