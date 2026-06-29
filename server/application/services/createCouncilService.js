@@ -8,6 +8,7 @@ import { createCreateStudentSession } from "./councilService/createCreateStudent
 import { createGetThread } from "./councilService/createGetThread.js";
 import { createGetThreadMessages } from "./councilService/createGetThreadMessages.js";
 import { createListThreadSummaries } from "./councilService/createListThreadSummaries.js";
+import { createSignupStudent } from "./councilService/createSignupStudent.js";
 import { createStudentRegisteredEventBuilder } from "./councilService/createStudentRegisteredEventBuilder.js";
 import { createStudentProfileSupport } from "./councilService/createStudentProfileSupport.js";
 import { createDomainEvent } from "../../domain/shared/domainEvent.js";
@@ -62,6 +63,13 @@ export const createCouncilService = ({
   const createStudentSession = createCreateStudentSession({
     ensureStudentProfile,
     hashPin,
+    stateStore,
+  });
+  const signupStudent = createSignupStudent({
+    buildStudentRegisteredEvent,
+    clock,
+    ensureStudentProfile,
+    getStudentRecord,
     stateStore,
   });
 
@@ -196,36 +204,7 @@ export const createCouncilService = ({
 
     createStudentSession,
 
-    async signupStudent(payload) {
-      const profile = normalizeStudentIdentity(payload || {});
-      const state = await stateStore.read();
-
-      if (getStudentRecord(state, profile)) {
-        throw conflict("Student already exists");
-      }
-
-      const ensured = ensureStudentProfile(state, payload || {}, {
-        createIfMissing: true,
-        email: payload?.email,
-      });
-
-      if (!ensured) {
-        throw badRequest("Invalid student credentials");
-      }
-
-      await stateStore.transact(async () => ({
-        events: [
-          buildStudentRegisteredEvent({
-            email: payload.email,
-            now: clock.now(),
-            pin: payload.pin,
-            profile,
-          }),
-        ],
-      }));
-
-      return { profile: ensured, threads: [] };
-    },
+    signupStudent,
 
     async updateStudentEmail(payload) {
       const state = await stateStore.read();
