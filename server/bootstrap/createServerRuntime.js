@@ -86,6 +86,11 @@ export const createServerRuntime = async ({ config }) => {
       }
 
       if (event.type === "thread.messageAdded" && event.payload?.thread) {
+        sseHub.broadcast("thread-message", {
+          message: event.payload.thread.messages.at(-1) || null,
+          thread: createThreadSummary(event.payload.thread),
+          threadId: event.payload.thread.id,
+        });
         typingPresence.clearThread(event.payload.thread.id);
       }
     }
