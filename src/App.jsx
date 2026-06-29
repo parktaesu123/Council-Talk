@@ -3014,21 +3014,11 @@ function MessageBubble({
   const isReactionPickerOpen = activeReactionPickerId === message.id;
 
   return (
-    <article
-      className={`bubble ${message.author} ${onReply && !isEditing ? "replyable" : ""}`}
-      key={message.id}
-      onClick={() => {
-        if (!isEditing && onReply) {
-          onReply();
-        }
-      }}
-    >
-      {!isEditing && onReply && (
+    <article className={`bubble ${message.author}`} key={message.id}>
+      {!isEditing && onReply && isOwnMessage && (
         <button
           aria-label="답장"
-          className={`message-reply-trigger ${
-            (!isOwnMessage || (isOwnMessage && canManage)) ? "with-menu" : ""
-          }`}
+          className={`message-reply-trigger ${canManage ? "with-menu" : ""}`}
           onClick={(event) => {
             event.stopPropagation();
             onReply();
