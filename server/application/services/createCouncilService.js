@@ -4,6 +4,7 @@ import {
   notFound,
   unauthorized,
 } from "../errors.js";
+import { createCreateStudentSession } from "./councilService/createCreateStudentSession.js";
 import { createGetThread } from "./councilService/createGetThread.js";
 import { createGetThreadMessages } from "./councilService/createGetThreadMessages.js";
 import { createListThreadSummaries } from "./councilService/createListThreadSummaries.js";
@@ -56,6 +57,11 @@ export const createCouncilService = ({
     stateStore,
   });
   const getThreadMessages = createGetThreadMessages({
+    stateStore,
+  });
+  const createStudentSession = createCreateStudentSession({
+    ensureStudentProfile,
+    hashPin,
     stateStore,
   });
 
@@ -188,34 +194,7 @@ export const createCouncilService = ({
       return { tags: outcome.state.tags };
     },
 
-    async createStudentSession(payload) {
-      const state = await stateStore.read();
-      const profile = payload?.studentId
-        ? ensureStudentProfile(state, payload || {})
-        : (() => {
-            const cleanName = String(payload?.name || "").trim();
-            const cleanPin = String(payload?.pin || "").trim();
-
-            if (!cleanName || !isValidStudentPin(cleanPin)) {
-              return null;
-            }
-
-            const student = Object.values(state.students).find(
-              (item) => item.name === cleanName && item.pinHash === hashPin(cleanPin),
-            );
-
-            return student ? publicStudent(student) : null;
-          })();
-
-      if (!profile) {
-        throw unauthorized("Invalid student credentials");
-      }
-
-      return {
-        profile,
-        threads: createThreadSummaries(getVisibleThreads(state, profile)),
-      };
-    },
+    createStudentSession,
 
     async signupStudent(payload) {
       const profile = normalizeStudentIdentity(payload || {});
