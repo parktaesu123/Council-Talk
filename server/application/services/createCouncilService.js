@@ -8,6 +8,7 @@ import { createCreateStudentSession } from "./councilService/createCreateStudent
 import { createGetThread } from "./councilService/createGetThread.js";
 import { createGetThreadMessages } from "./councilService/createGetThreadMessages.js";
 import { createListThreadSummaries } from "./councilService/createListThreadSummaries.js";
+import { createListStudents } from "./councilService/createListStudents.js";
 import { createSignupStudent } from "./councilService/createSignupStudent.js";
 import { createStudentRegisteredEventBuilder } from "./councilService/createStudentRegisteredEventBuilder.js";
 import { createStudentProfileSupport } from "./councilService/createStudentProfileSupport.js";
@@ -70,6 +71,9 @@ export const createCouncilService = ({
     clock,
     ensureStudentProfile,
     getStudentRecord,
+    stateStore,
+  });
+  const listStudents = createListStudents({
     stateStore,
   });
 
@@ -243,10 +247,7 @@ export const createCouncilService = ({
       };
     },
 
-    async listStudents() {
-      const state = await stateStore.read();
-      return { students: listPublicStudents(state) };
-    },
+    listStudents,
 
     async requestProfileChange(payload) {
       const state = await stateStore.read();
