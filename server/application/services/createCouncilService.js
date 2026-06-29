@@ -10,6 +10,7 @@ import { createGetThreadMessages } from "./councilService/createGetThreadMessage
 import { createListThreadSummaries } from "./councilService/createListThreadSummaries.js";
 import { createListStudents } from "./councilService/createListStudents.js";
 import { createSignupStudent } from "./councilService/createSignupStudent.js";
+import { createUpdateStudentEmail } from "./councilService/createUpdateStudentEmail.js";
 import { createStudentRegisteredEventBuilder } from "./councilService/createStudentRegisteredEventBuilder.js";
 import { createStudentProfileSupport } from "./councilService/createStudentProfileSupport.js";
 import { createDomainEvent } from "../../domain/shared/domainEvent.js";
@@ -74,6 +75,11 @@ export const createCouncilService = ({
     stateStore,
   });
   const listStudents = createListStudents({
+    stateStore,
+  });
+  const updateStudentEmail = createUpdateStudentEmail({
+    clock,
+    ensureStudentProfile,
     stateStore,
   });
 
@@ -210,42 +216,7 @@ export const createCouncilService = ({
 
     signupStudent,
 
-    async updateStudentEmail(payload) {
-      const state = await stateStore.read();
-      const profile = ensureStudentProfile(state, payload || {});
-      const email = normalizeEmail(payload?.email);
-
-      if (!profile || !isValidEmail(email)) {
-        throw badRequest("Invalid student email");
-      }
-
-      const outcome = await stateStore.transact(async (currentState) => {
-        const saved = getStudentRecord(currentState, profile);
-
-        if (!saved) {
-          throw notFound("Student not found");
-        }
-
-        return {
-          events: [
-            createDomainEvent({
-              type: "student.emailUpdated",
-              payload: {
-                student: {
-                  ...saved,
-                  email,
-                  updatedAt: clock.now(),
-                },
-              },
-            }),
-          ],
-        };
-      });
-
-      return {
-        profile: publicStudent(outcome.state.students[studentKey(profile)]),
-      };
-    },
+    updateStudentEmail,
 
     listStudents,
 
