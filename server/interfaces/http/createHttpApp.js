@@ -177,6 +177,7 @@ export const createHttpApp = ({ runtime }) => {
     await runtime.handleCommittedEvents(result.domainEvents);
     response.json({
       duplicate: result.duplicate,
+      message: result.message,
       thread: result.thread,
       threads: result.threads,
     });

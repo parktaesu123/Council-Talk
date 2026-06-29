@@ -8,6 +8,7 @@ import { createDomainEvent } from "../../domain/shared/domainEvent.js";
 import {
   canManageMessage,
   canUseThreadAsStudent,
+  createThreadSummary,
   createThreadSummaries,
   getVisibleThreads,
   initialCouncilState,
@@ -733,7 +734,7 @@ export const createCouncilService = ({
       return {
         duplicate: Boolean(result?.duplicate),
         message: result?.message || null,
-        thread: normalizeThreadForClient(result?.thread || null),
+        thread: result?.thread ? createThreadSummary(result.thread) : null,
         threads: result?.threads || createThreadSummaries(state.threads),
         domainEvents: outcome.events,
       };

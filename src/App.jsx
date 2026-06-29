@@ -123,6 +123,12 @@ const createReplyTarget = (message) => ({
   authorLabel: message.authorLabel,
   text: String(message.text || ""),
 });
+const replaceOptimisticMessage = (messages, clientMessageId, nextMessage) =>
+  (messages || []).map((message) =>
+    message.clientMessageId === clientMessageId || message.id === clientMessageId
+      ? nextMessage
+      : message,
+  );
 const mergeThreadList = (threads, nextThread) => {
   const normalized = toThreadSummary(nextThread);
   const index = threads.findIndex((thread) => thread.id === normalized.id);
@@ -1009,7 +1015,39 @@ function App() {
     lastStudentSendRef.current = signature;
     setIsStudentSending(true);
     const clientMessageId = crypto.randomUUID();
+    const optimisticMessage = {
+      id: clientMessageId,
+      clientMessageId,
+      author: "student",
+      authorLabel: studentProfile?.name || currentThread?.name || "",
+      createdAt: new Date().toISOString(),
+      time: getTimeLabel(),
+      text,
+      ...(studentReplyTarget ? { replyTo: studentReplyTarget } : {}),
+    };
+    const optimisticUpdatedAt = new Date().toISOString();
     setStudentMessage("");
+    setCurrentThreadDetail((current) =>
+      current
+        ? {
+            ...current,
+            status: "미완료",
+            updatedAt: optimisticUpdatedAt,
+            messageCount: (current.messageCount || current.messages?.length || 0) + 1,
+            messages: [...(current.messages || []), optimisticMessage],
+          }
+        : current,
+    );
+    setThreads((current) =>
+      mergeThreadList(current, {
+        ...(current.find((thread) => thread.id === currentThread.id) || currentThread),
+        status: "미완료",
+        updatedAt: optimisticUpdatedAt,
+        messageCount:
+          ((current.find((thread) => thread.id === currentThread.id) || currentThread)?.messageCount || 0) + 1,
+        latestMessage: optimisticMessage,
+      }),
+    );
 
     try {
       const data = await apiRequest(`/api/threads/${currentThread.id}/messages`, {
@@ -1025,13 +1063,48 @@ function App() {
         }),
       });
       setThreads((current) => mergeThreadList(current, data.thread));
-      setCurrentThreadDetail(data.thread);
+      setCurrentThreadDetail((current) =>
+        current
+          ? {
+              ...current,
+              status: data.thread?.status || current.status,
+              updatedAt: data.thread?.updatedAt || current.updatedAt,
+              messageCount: data.thread?.messageCount || current.messageCount,
+              messages: data.duplicate
+                ? current.messages
+                : replaceOptimisticMessage(current.messages, clientMessageId, data.message || optimisticMessage),
+            }
+          : current,
+      );
       setCurrentThreadHasMore(false);
       setCurrentThreadNextCursor(null);
       setStudentReplyTarget(null);
     } catch {
       lastStudentSendRef.current = "";
       setStudentMessage(text);
+      setCurrentThreadDetail((current) =>
+        current
+          ? {
+              ...current,
+              messageCount: Math.max(0, (current.messageCount || 1) - 1),
+              messages: (current.messages || []).filter((message) => message.clientMessageId !== clientMessageId),
+            }
+          : current,
+      );
+      if (currentThread) {
+        setThreads((current) =>
+          current.map((thread) =>
+            thread.id === currentThread.id
+              ? {
+                  ...thread,
+                  messageCount: Math.max(0, (thread.messageCount || 1) - 1),
+                  latestMessage:
+                    thread.latestMessage?.clientMessageId === clientMessageId ? null : thread.latestMessage,
+                }
+              : thread,
+          ),
+        );
+      }
     } finally {
       studentSendLockRef.current = false;
       setIsStudentSending(false);
@@ -1079,7 +1152,39 @@ function App() {
     setIsAdminSending(true);
     const authorLabel = adminName.trim() || "학생회";
     const clientMessageId = crypto.randomUUID();
+    const optimisticMessage = {
+      id: clientMessageId,
+      clientMessageId,
+      author: "admin",
+      authorLabel,
+      createdAt: new Date().toISOString(),
+      time: getTimeLabel(),
+      text,
+      ...(adminReplyTarget ? { replyTo: adminReplyTarget } : {}),
+    };
+    const optimisticUpdatedAt = new Date().toISOString();
     setAdminReply("");
+    setSelectedThreadDetail((current) =>
+      current
+        ? {
+            ...current,
+            status: "진행중",
+            updatedAt: optimisticUpdatedAt,
+            messageCount: (current.messageCount || current.messages?.length || 0) + 1,
+            messages: [...(current.messages || []), optimisticMessage],
+          }
+        : current,
+    );
+    setThreads((current) =>
+      mergeThreadList(current, {
+        ...(current.find((thread) => thread.id === selectedThread.id) || selectedThread),
+        status: "진행중",
+        updatedAt: optimisticUpdatedAt,
+        messageCount:
+          ((current.find((thread) => thread.id === selectedThread.id) || selectedThread)?.messageCount || 0) + 1,
+        latestMessage: optimisticMessage,
+      }),
+    );
 
     try {
       const data = await apiRequest(`/api/threads/${selectedThread.id}/messages`, {
@@ -1093,7 +1198,19 @@ function App() {
         }),
       });
       setThreads((current) => mergeThreadList(current, data.thread));
-      setSelectedThreadDetail(data.thread);
+      setSelectedThreadDetail((current) =>
+        current
+          ? {
+              ...current,
+              status: data.thread?.status || current.status,
+              updatedAt: data.thread?.updatedAt || current.updatedAt,
+              messageCount: data.thread?.messageCount || current.messageCount,
+              messages: data.duplicate
+                ? current.messages
+                : replaceOptimisticMessage(current.messages, clientMessageId, data.message || optimisticMessage),
+            }
+          : current,
+      );
       setSelectedThreadHasMore(false);
       setSelectedThreadNextCursor(null);
       setAdminReplyTarget(null);
@@ -1109,6 +1226,29 @@ function App() {
     } catch {
       lastAdminSendRef.current = "";
       setAdminReply(text);
+      setSelectedThreadDetail((current) =>
+        current
+          ? {
+              ...current,
+              messageCount: Math.max(0, (current.messageCount || 1) - 1),
+              messages: (current.messages || []).filter((message) => message.clientMessageId !== clientMessageId),
+            }
+          : current,
+      );
+      if (selectedThread) {
+        setThreads((current) =>
+          current.map((thread) =>
+            thread.id === selectedThread.id
+              ? {
+                  ...thread,
+                  messageCount: Math.max(0, (thread.messageCount || 1) - 1),
+                  latestMessage:
+                    thread.latestMessage?.clientMessageId === clientMessageId ? null : thread.latestMessage,
+                }
+              : thread,
+          ),
+        );
+      }
     } finally {
       adminSendLockRef.current = false;
       setIsAdminSending(false);
