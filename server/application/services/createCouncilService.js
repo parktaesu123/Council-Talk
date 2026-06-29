@@ -4,6 +4,7 @@ import {
   notFound,
   unauthorized,
 } from "../errors.js";
+import { createGetThread } from "./councilService/createGetThread.js";
 import { createListThreadSummaries } from "./councilService/createListThreadSummaries.js";
 import { createStudentRegisteredEventBuilder } from "./councilService/createStudentRegisteredEventBuilder.js";
 import { createStudentProfileSupport } from "./councilService/createStudentProfileSupport.js";
@@ -50,6 +51,9 @@ export const createCouncilService = ({
   const listThreadSummaries = createListThreadSummaries({
     stateStore,
   });
+  const getThread = createGetThread({
+    stateStore,
+  });
 
   return {
     async getState() {
@@ -62,16 +66,7 @@ export const createCouncilService = ({
 
     listThreadSummaries,
 
-    async getThread(threadId) {
-      const state = await stateStore.read();
-      const thread = state.threads.find((item) => item.id === threadId);
-
-      if (!thread) {
-        throw notFound("Thread not found");
-      }
-
-      return { thread: normalizeThreadForClient(thread) };
-    },
+    getThread,
 
     async getThreadMessages(threadId, options = {}) {
       const state = await stateStore.read();
