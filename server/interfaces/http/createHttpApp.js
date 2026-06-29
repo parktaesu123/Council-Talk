@@ -205,6 +205,19 @@ export const createHttpApp = ({ runtime }) => {
     });
   }));
 
+  app.post("/api/threads/:id/messages/:messageId/reactions", createRouteHandler(async (request, response) => {
+    const result = await runtime.service.reactToMessage(
+      request.params.id,
+      request.params.messageId,
+      request.body || {},
+    );
+    await runtime.handleCommittedEvents(result.domainEvents);
+    response.json({
+      thread: result.thread,
+      threads: result.threads,
+    });
+  }));
+
   app.delete("/api/threads/:id/messages/:messageId", createRouteHandler(async (request, response) => {
     const result = await runtime.service.deleteMessage(
       request.params.id,

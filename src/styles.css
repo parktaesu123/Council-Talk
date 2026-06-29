@@ -961,6 +961,10 @@ textarea:focus {
   z-index: 2;
 }
 
+.message-menu-wrap.guest-menu {
+  right: 8px;
+}
+
 .message-reply-trigger {
   position: absolute;
   top: 8px;
@@ -1025,6 +1029,10 @@ textarea:focus {
   box-shadow: 0 10px 26px rgba(0, 0, 0, 0.12);
 }
 
+.message-action-menu {
+  overflow: visible;
+}
+
 .message-menu button {
   height: 32px;
   border: 0;
@@ -1038,6 +1046,17 @@ textarea:focus {
 
 .message-menu button:hover {
   background: var(--surface-soft);
+}
+
+.message-menu-emoji {
+  position: absolute;
+  top: calc(100% + 8px);
+  right: 0;
+}
+
+.message-menu-emoji .emoji-picker {
+  position: static;
+  width: min(320px, calc(100vw - 88px));
 }
 
 .message-edit-box {
@@ -1078,6 +1097,47 @@ textarea:focus {
 
 .bubble.admin .message-reply-context span {
   color: rgba(255, 255, 255, 0.72);
+}
+
+.message-reactions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 6px;
+  margin-top: 10px;
+}
+
+.message-reaction-chip {
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  min-height: 30px;
+  padding: 0 10px;
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  background: rgba(255, 255, 255, 0.82);
+  color: var(--ink);
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.message-reaction-chip strong {
+  font-size: 12px;
+}
+
+.message-reaction-chip.active {
+  border-color: #d59d22;
+  background: #fff5db;
+}
+
+.bubble.admin .message-reaction-chip {
+  border-color: rgba(255, 255, 255, 0.2);
+  background: rgba(255, 255, 255, 0.12);
+  color: #ffffff;
+}
+
+.bubble.admin .message-reaction-chip.active {
+  border-color: rgba(255, 219, 128, 0.72);
+  background: rgba(255, 219, 128, 0.18);
 }
 
 .message-edit-box textarea {

@@ -137,3 +137,43 @@ test("thread summaries and message pagination avoid loading full history", async
   assert.equal(secondPage.messages.length, 3);
   assert.equal(secondPage.hasMore, false);
 });
+
+test("message reactions toggle and persist on the target message", async () => {
+  const service = await createTestService();
+
+  await service.signupStudent({
+    studentId: "1234",
+    name: "홍길동",
+    pin: "1111",
+    email: "student@example.com",
+  });
+
+  const created = await service.createThread({
+    studentId: "1234",
+    name: "홍길동",
+    pin: "1111",
+    title: "이모지 문의",
+    content: "반응 테스트",
+  });
+
+  const targetMessage = created.thread.messages[0];
+
+  await service.reactToMessage(created.thread.id, targetMessage.id, {
+    author: "admin",
+    authorLabel: "학생회",
+    emoji: "😀",
+  });
+
+  let loaded = await service.getThread(created.thread.id);
+  assert.equal(loaded.thread.messages[0].reactions[0].emoji, "😀");
+  assert.equal(loaded.thread.messages[0].reactions[0].count, 1);
+
+  await service.reactToMessage(created.thread.id, targetMessage.id, {
+    author: "admin",
+    authorLabel: "학생회",
+    emoji: "😀",
+  });
+
+  loaded = await service.getThread(created.thread.id);
+  assert.deepEqual(loaded.thread.messages[0].reactions, []);
+});

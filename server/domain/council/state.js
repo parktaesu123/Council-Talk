@@ -69,6 +69,8 @@ export const normalizeReplyTarget = (value) => {
   return { id, authorLabel, text };
 };
 
+export const normalizeMessageReactionEmoji = (value) => String(value || "").trim().slice(0, 16);
+
 export const isRecentDuplicateMessage = (message, { author, text }, nowMs) => {
   if (!message || message.author !== author || String(message.text || "").trim() !== text) {
     return false;

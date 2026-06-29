@@ -28,6 +28,7 @@ import {
   listPublicStudents,
   normalizeClientMessageId,
   normalizeEmail,
+  normalizeMessageReactionEmoji,
   normalizeReplyTarget,
   normalizeStudentIdentity,
   normalizeTagName,
@@ -663,6 +664,112 @@ export const createCouncilService = ({
             createDomainEvent({
               type: "thread.messageUpdated",
               payload: { thread: nextThread },
+            }),
+          ],
+          result: {
+            thread: nextThread,
+            threads:
+              author === "student"
+                ? createThreadSummaries(getVisibleThreads(state, profile))
+                : createThreadSummaries(state.threads),
+          },
+        };
+      });
+
+      return {
+        thread: normalizeThreadForClient(outcome.result.thread),
+        threads: outcome.result.threads,
+        domainEvents: outcome.events,
+      };
+    },
+
+    async reactToMessage(threadId, messageId, payload) {
+      const author = payload?.author;
+      const emoji = normalizeMessageReactionEmoji(payload?.emoji);
+
+      if (!emoji || !["student", "admin"].includes(author)) {
+        throw badRequest("Invalid message reaction");
+      }
+
+      const outcome = await stateStore.transact(async (state) => {
+        const thread = state.threads.find((item) => item.id === threadId);
+
+        if (!thread) {
+          throw notFound("Message not found");
+        }
+
+        const profile = author === "student" ? ensureStudentProfile(state, payload || {}) : null;
+
+        if (author === "student") {
+          if (!profile || !canUseThreadAsStudent(thread, profile)) {
+            throw unauthorized("Unauthorized message reaction");
+          }
+
+          if (profile.banned) {
+            const error = conflict("banned");
+            error.reason = profile.banReason;
+            error.status = 403;
+            throw error;
+          }
+        }
+
+        const message = thread.messages.find((item) => item.id === messageId);
+
+        if (!message) {
+          throw notFound("Message not found");
+        }
+
+        const reactorKey =
+          author === "student"
+            ? `student:${profile.studentId}:${profile.name}`
+            : `admin:${String(payload?.authorLabel || "학생회").trim().slice(0, 30) || "학생회"}`;
+
+        const nextThread = {
+          ...thread,
+          messages: thread.messages.map((item) => {
+            if (item.id !== messageId) {
+              return item;
+            }
+
+            const currentReactions = Array.isArray(item.reactions) ? item.reactions : [];
+            const targetReaction = currentReactions.find((reaction) => reaction.emoji === emoji);
+
+            const nextReactions = targetReaction
+              ? currentReactions
+                  .map((reaction) =>
+                    reaction.emoji !== emoji
+                      ? reaction
+                      : {
+                          ...reaction,
+                          reactorKeys: reaction.reactorKeys.includes(reactorKey)
+                            ? reaction.reactorKeys.filter((key) => key !== reactorKey)
+                            : [...reaction.reactorKeys, reactorKey],
+                        },
+                  )
+                  .filter((reaction) => reaction.reactorKeys.length > 0)
+              : [
+                  ...currentReactions,
+                  {
+                    emoji,
+                    reactorKeys: [reactorKey],
+                  },
+                ];
+
+            return {
+              ...item,
+              reactions: nextReactions.map((reaction) => ({
+                ...reaction,
+                count: reaction.reactorKeys.length,
+              })),
+            };
+          }),
+        };
+
+        return {
+          events: [
+            createDomainEvent({
+              type: "thread.messageUpdated",
+              payload: { thread: nextThread, messageId },
             }),
           ],
           result: {

@@ -7,6 +7,7 @@ import {
   Plus,
   Reply,
   Send,
+  Settings2,
   Smile,
   Trash2,
   UserRound,
@@ -124,12 +125,44 @@ const createReplyTarget = (message) => ({
   authorLabel: message.authorLabel,
   text: String(message.text || ""),
 });
+const createReactionActorKey = ({ author, authorLabel, profile }) =>
+  author === "student"
+    ? `student:${profile?.studentId || ""}:${profile?.name || ""}`
+    : `admin:${String(authorLabel || "학생회").trim() || "학생회"}`;
+const toggleReactionState = (message, emoji, reactorKey) => {
+  const currentReactions = Array.isArray(message.reactions) ? message.reactions : [];
+  const target = currentReactions.find((reaction) => reaction.emoji === emoji);
+  const nextReactions = target
+    ? currentReactions
+        .map((reaction) =>
+          reaction.emoji !== emoji
+            ? reaction
+            : {
+                ...reaction,
+                reactorKeys: (reaction.reactorKeys || []).includes(reactorKey)
+                  ? (reaction.reactorKeys || []).filter((key) => key !== reactorKey)
+                  : [...(reaction.reactorKeys || []), reactorKey],
+              },
+        )
+        .filter((reaction) => (reaction.reactorKeys || []).length > 0)
+    : [...currentReactions, { emoji, reactorKeys: [reactorKey] }];
+
+  return {
+    ...message,
+    reactions: nextReactions.map((reaction) => ({
+      ...reaction,
+      count: (reaction.reactorKeys || []).length,
+    })),
+  };
+};
 const replaceOptimisticMessage = (messages, clientMessageId, nextMessage) =>
   (messages || []).map((message) =>
     message.clientMessageId === clientMessageId || message.id === clientMessageId
       ? nextMessage
       : message,
   );
+const replaceMessageById = (messages, nextMessage) =>
+  (messages || []).map((message) => (message.id === nextMessage.id ? nextMessage : message));
 const mergeRealtimeMessageIntoDetail = (detail, message, threadSummary) => {
   if (!detail || !message) {
     return detail;
@@ -151,6 +184,17 @@ const mergeRealtimeMessageIntoDetail = (detail, message, threadSummary) => {
     ...detail,
     ...threadSummary,
     messages: [...(detail.messages || []), message],
+  };
+};
+const mergeUpdatedMessageIntoDetail = (detail, message, threadSummary) => {
+  if (!detail || !message) {
+    return detail;
+  }
+
+  return {
+    ...detail,
+    ...threadSummary,
+    messages: replaceMessageById(detail.messages, message),
   };
 };
 const mergeThreadList = (threads, nextThread) => {
@@ -262,6 +306,7 @@ function App() {
   const [adminTagFilter, setAdminTagFilter] = useState("all");
   const [adminTyping, setAdminTyping] = useState([]);
   const [emojiPickerTarget, setEmojiPickerTarget] = useState(null);
+  const [messageEmojiTarget, setMessageEmojiTarget] = useState(null);
   const [emojiQuery, setEmojiQuery] = useState("");
   const [emojiResults, setEmojiResults] = useState([]);
   const [isEmojiLoading, setIsEmojiLoading] = useState(false);
@@ -431,6 +476,33 @@ function App() {
       }
     });
 
+    events.addEventListener("thread-message-updated", (event) => {
+      try {
+        const data = JSON.parse(event.data);
+        if (!data.thread || !data.message) {
+          return;
+        }
+
+        setThreads((current) => mergeThreadList(current, data.thread));
+        setCurrentThreadDetail((current) =>
+          current?.id === data.threadId
+            ? mergeUpdatedMessageIntoDetail(current, data.message, data.thread)
+            : current,
+        );
+        setSelectedThreadDetail((current) =>
+          current?.id === data.threadId
+            ? mergeUpdatedMessageIntoDetail(current, data.message, data.thread)
+            : current,
+        );
+      } catch {
+        if (adminAuthed && isAdminRoute) {
+          loadAdminData();
+        } else {
+          refreshStudentSession().catch(() => {});
+        }
+      }
+    });
+
     events.addEventListener("typing", (event) => {
       try {
         const data = JSON.parse(event.data);
@@ -469,7 +541,7 @@ function App() {
   }, [adminAuthed, isAdminRoute, studentProfile]);
 
   useEffect(() => {
-    if (!emojiPickerTarget) {
+    if (!emojiPickerTarget && !messageEmojiTarget) {
       return;
     }
 
@@ -498,7 +570,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [emojiPickerTarget, emojiQuery]);
+  }, [emojiPickerTarget, emojiQuery, messageEmojiTarget]);
 
   useEffect(() => {
     if (!studentProfile || supportView !== "chat" || !currentThreadId) {
@@ -1371,6 +1443,7 @@ function App() {
   };
 
   const handleMessageEditStart = (message) => {
+    setMessageEmojiTarget(null);
     setEditingMessageId(message.id);
     setEditingText(message.text);
   };
@@ -1382,6 +1455,7 @@ function App() {
 
   const handleStudentReplyStart = (message) => {
     setActiveMessageMenuId(null);
+    setMessageEmojiTarget(null);
     setEditingMessageId(null);
     setEditingText("");
     setStudentReplyTarget(createReplyTarget(message));
@@ -1390,6 +1464,7 @@ function App() {
 
   const handleAdminReplyStart = (message) => {
     setActiveMessageMenuId(null);
+    setMessageEmojiTarget(null);
     setEditingMessageId(null);
     setEditingText("");
     setAdminReplyTarget(createReplyTarget(message));
@@ -1472,7 +1547,7 @@ function App() {
           pin: studentProfile?.pin,
           ...extra,
         }
-      : { author, ...extra };
+      : { author, authorLabel: adminName.trim() || "학생회", ...extra };
 
   const handleMessageUpdate = async (thread, message, author) => {
     const text = editingText.trim();
@@ -1530,6 +1605,56 @@ function App() {
             : item,
         ),
       );
+    }
+  };
+
+  const handleMessageReaction = async (thread, message, author, emoji) => {
+    if (!thread || !message || !emoji) {
+      return;
+    }
+
+    const reactorKey = createReactionActorKey({
+      author,
+      authorLabel: adminName.trim() || "학생회",
+      profile: studentProfile,
+    });
+    const optimisticMessage = toggleReactionState(message, emoji, reactorKey);
+
+    setThreads((current) => mergeThreadList(current, thread));
+    if (author === "student") {
+      setCurrentThreadDetail((current) =>
+        current?.id === thread.id ? mergeUpdatedMessageIntoDetail(current, optimisticMessage) : current,
+      );
+    } else {
+      setSelectedThreadDetail((current) =>
+        current?.id === thread.id ? mergeUpdatedMessageIntoDetail(current, optimisticMessage) : current,
+      );
+    }
+
+    try {
+      const data = await apiRequest(`/api/threads/${thread.id}/messages/${message.id}/reactions`, {
+        method: "POST",
+        body: JSON.stringify(getMessagePayload(author, { emoji })),
+      });
+      setThreads((current) => mergeThreadList(current, data.thread));
+      if (author === "student") {
+        setCurrentThreadDetail(data.thread);
+      } else {
+        setSelectedThreadDetail(data.thread);
+      }
+      setActiveMessageMenuId(null);
+      setMessageEmojiTarget(null);
+      setEmojiQuery("");
+    } catch {
+      if (author === "student") {
+        setCurrentThreadDetail((current) =>
+          current?.id === thread.id ? mergeUpdatedMessageIntoDetail(current, message) : current,
+        );
+      } else {
+        setSelectedThreadDetail((current) =>
+          current?.id === thread.id ? mergeUpdatedMessageIntoDetail(current, message) : current,
+        );
+      }
     }
   };
 
@@ -1767,6 +1892,7 @@ function App() {
           emojiPickerTarget={emojiPickerTarget}
           emojiQuery={emojiQuery}
           emojiResults={emojiResults}
+          messageEmojiTarget={messageEmojiTarget}
           selectedThreadTyping={selectedThreadTyping}
           selectedThread={selectedThread}
           selectedThreadId={selectedThreadId}
@@ -1786,6 +1912,7 @@ function App() {
           setEditingText={setEditingText}
           setEmojiPickerTarget={setEmojiPickerTarget}
           setEmojiQuery={setEmojiQuery}
+          setMessageEmojiTarget={setMessageEmojiTarget}
           setSelectedThreadId={setSelectedThreadId}
           setSelectedStudentKey={setSelectedStudentKey}
           setTagName={setTagName}
@@ -1906,6 +2033,7 @@ function App() {
           emojiPickerTarget={emojiPickerTarget}
           emojiQuery={emojiQuery}
           emojiResults={emojiResults}
+          messageEmojiTarget={messageEmojiTarget}
           handleStudentSend={handleStudentSend}
           isEmojiLoading={isEmojiLoading}
           isLoadingMessages={isCurrentThreadLoading}
@@ -1920,6 +2048,7 @@ function App() {
           setSupportView={setSupportView}
           setEmojiPickerTarget={setEmojiPickerTarget}
           setEmojiQuery={setEmojiQuery}
+          setMessageEmojiTarget={setMessageEmojiTarget}
           setStudentMessage={handleStudentMessageChange}
           setStudentReplyTarget={setStudentReplyTarget}
           isCreatingThread={isCreatingThread}
@@ -2312,6 +2441,7 @@ function SupportPanel({
   emojiPickerTarget,
   emojiQuery,
   emojiResults,
+  messageEmojiTarget,
   editingText,
   activeMessageMenuId,
   handleEmojiPick,
@@ -2337,6 +2467,7 @@ function SupportPanel({
   setEditingText,
   setEmojiPickerTarget,
   setEmojiQuery,
+  setMessageEmojiTarget,
   setForm,
   setIsSupportOpen,
   setSupportView,
@@ -2555,13 +2686,24 @@ function SupportPanel({
                 key={message.id}
                 message={message}
                 activeMessageMenuId={activeMessageMenuId}
+                activeReactionPickerId={messageEmojiTarget}
                 onCancelEdit={handleMessageEditCancel}
                 onChangeEdit={setEditingText}
                 onDelete={() => handleMessageDelete(currentThread, message, "student")}
+                onReact={(emoji) => handleMessageReaction(currentThread, message, "student", emoji)}
                 onReply={() => handleStudentReplyStart(message)}
                 onSaveEdit={() => handleMessageUpdate(currentThread, message, "student")}
                 setActiveMessageMenuId={setActiveMessageMenuId}
+                setMessageEmojiTarget={setMessageEmojiTarget}
                 onStartEdit={() => handleMessageEditStart(message)}
+                emojiResults={emojiResults}
+                isEmojiLoading={isEmojiLoading}
+                onEmojiQueryChange={setEmojiQuery}
+                emojiQuery={emojiQuery}
+                reactionActorKey={createReactionActorKey({
+                  author: "student",
+                  profile: studentProfile,
+                })}
               />
             ))}
           </div>
@@ -2846,21 +2988,30 @@ function ReplyPreviewBar({ onClear, replyTarget }) {
 function MessageBubble({
   actor,
   activeMessageMenuId,
+  activeReactionPickerId,
   canManage = true,
   editingMessageId,
+  emojiQuery,
+  emojiResults,
   editingText,
+  isEmojiLoading,
   message,
   onCancelEdit,
   onChangeEdit,
   onDelete,
+  onEmojiQueryChange,
+  onReact,
   onReply,
   onSaveEdit,
   onStartEdit,
+  reactionActorKey,
   setActiveMessageMenuId,
+  setMessageEmojiTarget,
 }) {
   const isOwnMessage = message.author === actor;
   const isEditing = editingMessageId === message.id;
   const isMenuOpen = activeMessageMenuId === message.id;
+  const isReactionPickerOpen = activeReactionPickerId === message.id;
 
   return (
     <article
@@ -2875,7 +3026,9 @@ function MessageBubble({
       {!isEditing && onReply && (
         <button
           aria-label="답장"
-          className={`message-reply-trigger ${isOwnMessage && canManage ? "with-menu" : ""}`}
+          className={`message-reply-trigger ${
+            (!isOwnMessage || (isOwnMessage && canManage)) ? "with-menu" : ""
+          }`}
           onClick={(event) => {
             event.stopPropagation();
             onReply();
@@ -2885,6 +3038,57 @@ function MessageBubble({
           <Reply size={14} />
         </button>
       )}
+      {!isOwnMessage && !isEditing && (
+        <div className="message-menu-wrap guest-menu">
+          <button
+            aria-label="메시지 옵션"
+            className="message-menu-trigger"
+            onClick={(event) => {
+              event.stopPropagation();
+              setActiveMessageMenuId(isMenuOpen ? null : message.id);
+              setMessageEmojiTarget(null);
+            }}
+            type="button"
+          >
+            <Settings2 size={14} />
+          </button>
+          {isMenuOpen && (
+            <div className="message-menu message-action-menu" onClick={(event) => event.stopPropagation()}>
+              <button
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setActiveMessageMenuId(null);
+                  setMessageEmojiTarget(null);
+                  onReply();
+                }}
+                type="button"
+              >
+                답장
+              </button>
+              <button
+                onClick={(event) => {
+                  event.stopPropagation();
+                  setMessageEmojiTarget(isReactionPickerOpen ? null : message.id);
+                }}
+                type="button"
+              >
+                이모지
+              </button>
+              {isReactionPickerOpen && (
+                <div className="message-menu-emoji">
+                  <EmojiPicker
+                    emojis={emojiResults}
+                    isLoading={isEmojiLoading}
+                    onPick={(emoji) => onReact(emoji.emoji)}
+                    onQueryChange={onEmojiQueryChange}
+                    query={emojiQuery}
+                  />
+                </div>
+              )}
+            </div>
+          )}
+        </div>
+      )}
       {isOwnMessage && canManage && !isEditing && (
         <div className="message-menu-wrap">
           <button
@@ -2892,6 +3096,7 @@ function MessageBubble({
             className="message-menu-trigger"
             onClick={(event) => {
               event.stopPropagation();
+              setMessageEmojiTarget(null);
               setActiveMessageMenuId(isMenuOpen ? null : message.id);
             }}
             type="button"
@@ -2981,6 +3186,24 @@ function MessageBubble({
             </div>
           )}
           <p>{message.text}</p>
+          {Array.isArray(message.reactions) && message.reactions.length > 0 && (
+            <div className="message-reactions" onClick={(event) => event.stopPropagation()}>
+              {message.reactions.map((reaction) => {
+                const isActive = (reaction.reactorKeys || []).includes(reactionActorKey);
+                return (
+                  <button
+                    className={`message-reaction-chip ${isActive ? "active" : ""}`}
+                    key={`${message.id}:${reaction.emoji}`}
+                    onClick={() => onReact(reaction.emoji)}
+                    type="button"
+                  >
+                    <span>{reaction.emoji}</span>
+                    <strong>{reaction.count || (reaction.reactorKeys || []).length}</strong>
+                  </button>
+                );
+              })}
+            </div>
+          )}
         </>
       )}
     </article>
@@ -3002,6 +3225,7 @@ function AdminScreen({
   emojiPickerTarget,
   emojiQuery,
   emojiResults,
+  messageEmojiTarget,
   handleCreateTag,
   handleAdminLogin,
   handleEmojiPick,
@@ -3046,6 +3270,7 @@ function AdminScreen({
   setEditingText,
   setEmojiPickerTarget,
   setEmojiQuery,
+  setMessageEmojiTarget,
   setSelectedThreadId,
   setSelectedStudentKey,
   setTagName,
@@ -3373,13 +3598,24 @@ function AdminScreen({
                   editingText={editingText}
                   key={message.id}
                   message={message}
+                  activeReactionPickerId={messageEmojiTarget}
                   onCancelEdit={handleMessageEditCancel}
                   onChangeEdit={setEditingText}
                   onDelete={() => handleMessageDelete(selectedThread, message, "admin")}
+                  onReact={(emoji) => handleMessageReaction(selectedThread, message, "admin", emoji)}
                   onReply={() => handleAdminReplyStart(message)}
                   onSaveEdit={() => handleMessageUpdate(selectedThread, message, "admin")}
                   setActiveMessageMenuId={setActiveMessageMenuId}
+                  setMessageEmojiTarget={setMessageEmojiTarget}
                   onStartEdit={() => handleMessageEditStart(message)}
+                  emojiResults={emojiResults}
+                  isEmojiLoading={isEmojiLoading}
+                  onEmojiQueryChange={setEmojiQuery}
+                  emojiQuery={emojiQuery}
+                  reactionActorKey={createReactionActorKey({
+                    author: "admin",
+                    authorLabel: adminName.trim() || "학생회",
+                  })}
                 />
               ))}
             </div>
