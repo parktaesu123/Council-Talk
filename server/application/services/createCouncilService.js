@@ -4,6 +4,7 @@ import {
   notFound,
   unauthorized,
 } from "../errors.js";
+import { createListThreadSummaries } from "./councilService/createListThreadSummaries.js";
 import { createStudentRegisteredEventBuilder } from "./councilService/createStudentRegisteredEventBuilder.js";
 import { createStudentProfileSupport } from "./councilService/createStudentProfileSupport.js";
 import { createDomainEvent } from "../../domain/shared/domainEvent.js";
@@ -46,6 +47,9 @@ export const createCouncilService = ({
   const { buildStudentRegisteredEvent } = createStudentRegisteredEventBuilder({
     hashPin,
   });
+  const listThreadSummaries = createListThreadSummaries({
+    stateStore,
+  });
 
   return {
     async getState() {
@@ -53,16 +57,10 @@ export const createCouncilService = ({
     },
 
     async listThreads() {
-      const state = await stateStore.read();
-      return { threads: createThreadSummaries(sortThreadsByActivity(state.threads)) };
+      return listThreadSummaries();
     },
 
-    async listThreadSummaries() {
-      const state = await stateStore.read();
-      return {
-        threads: createThreadSummaries(sortThreadsByActivity(state.threads)),
-      };
-    },
+    listThreadSummaries,
 
     async getThread(threadId) {
       const state = await stateStore.read();
