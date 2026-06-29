@@ -13,7 +13,7 @@ import {
   UserRound,
   X,
 } from "lucide-react";
-import { useEffect, useRef, useState } from "react";
+import { memo, useEffect, useMemo, useRef, useState } from "react";
 import EmojiPicker from "./components/EmojiPicker.jsx";
 
 const STORAGE_KEY = "council-talk-threads";
@@ -320,6 +320,14 @@ function App() {
   const adminReplyHasText = Boolean(adminReply.trim());
   const studentComposeRef = useRef(null);
   const adminComposeRef = useRef(null);
+  const currentThreadSummary = useMemo(
+    () => threads.find((thread) => thread.id === currentThreadId) || null,
+    [currentThreadId, threads],
+  );
+  const selectedThreadSummary = useMemo(
+    () => threads.find((thread) => thread.id === selectedThreadId) || null,
+    [selectedThreadId, threads],
+  );
 
   const syncPageState = (path) => {
     setRoute(path);
@@ -609,7 +617,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [currentThreadId, studentProfile, supportView, threads]);
+  }, [currentThreadId, currentThreadSummary?.id, studentProfile, supportView]);
 
   useEffect(() => {
     if (!adminAuthed || !isAdminRoute || !selectedThreadId) {
@@ -648,7 +656,7 @@ function App() {
     return () => {
       cancelled = true;
     };
-  }, [adminAuthed, isAdminRoute, selectedThreadId, threads]);
+  }, [adminAuthed, isAdminRoute, selectedThreadId, selectedThreadSummary?.id]);
 
   useEffect(() => {
     if (!adminAuthed || !isAdminRoute || !selectedThreadId) {
@@ -813,8 +821,6 @@ function App() {
     }
   }, [adminFilter, adminSection, adminTagFilter, isAdminRoute, route, selectedThreadId, threads]);
 
-  const currentThreadSummary = threads.find((thread) => thread.id === currentThreadId);
-  const selectedThreadSummary = threads.find((thread) => thread.id === selectedThreadId);
   const currentThread =
     currentThreadDetail?.id === currentThreadId
       ? currentThreadDetail
@@ -823,26 +829,43 @@ function App() {
     selectedThreadDetail?.id === selectedThreadId
       ? selectedThreadDetail
       : selectedThreadSummary;
-  const selectedStudent = students.find((student) => studentKey(student) === selectedStudentKey);
-  const studentThreads = studentProfile
-    ? threads.filter(
-        (thread) =>
-          thread.studentId === studentProfile.studentId && thread.name === studentProfile.name,
-      )
-    : [];
-  const filteredAdminThreads =
-    threads.filter((thread) => {
-      const statusMatches = adminFilter === "all" || normalizeStatus(thread.status) === adminFilter;
-      const tagMatches =
-        adminTagFilter === "all" ||
-        (adminTagFilter === "untagged" ? !thread.tagId : thread.tagId === adminTagFilter);
+  const selectedStudent = useMemo(
+    () => students.find((student) => studentKey(student) === selectedStudentKey) || null,
+    [selectedStudentKey, students],
+  );
+  const studentThreads = useMemo(
+    () =>
+      studentProfile
+        ? threads.filter(
+            (thread) =>
+              thread.studentId === studentProfile.studentId && thread.name === studentProfile.name,
+          )
+        : [],
+    [studentProfile, threads],
+  );
+  const filteredAdminThreads = useMemo(
+    () =>
+      threads.filter((thread) => {
+        const statusMatches = adminFilter === "all" || normalizeStatus(thread.status) === adminFilter;
+        const tagMatches =
+          adminTagFilter === "all" ||
+          (adminTagFilter === "untagged" ? !thread.tagId : thread.tagId === adminTagFilter);
 
-      return statusMatches && tagMatches;
-    });
-  const typingThreadIds = new Set(adminTyping.map((item) => item.threadId));
-  const selectedThreadTyping = selectedThreadSummary
-    ? adminTyping.filter((item) => item.threadId === selectedThreadSummary.id)
-    : [];
+        return statusMatches && tagMatches;
+      }),
+    [adminFilter, adminTagFilter, threads],
+  );
+  const typingThreadIds = useMemo(
+    () => new Set(adminTyping.map((item) => item.threadId)),
+    [adminTyping],
+  );
+  const selectedThreadTyping = useMemo(
+    () =>
+      selectedThreadSummary
+        ? adminTyping.filter((item) => item.threadId === selectedThreadSummary.id)
+        : [],
+    [adminTyping, selectedThreadSummary],
+  );
   
   useEffect(() => {
     if (studentReplyTarget && !currentThread?.messages?.some((message) => message.id === studentReplyTarget.id)) {
@@ -856,34 +879,49 @@ function App() {
     }
   }, [adminReplyTarget, selectedThread]);
 
-  const statusCounts = threads.reduce(
-    (counts, thread) => {
-      counts.all += 1;
-      counts[normalizeStatus(thread.status)] += 1;
-      return counts;
-    },
-    { all: 0, 미완료: 0, 진행중: 0, 완료: 0 },
+  const statusCounts = useMemo(
+    () =>
+      threads.reduce(
+        (counts, thread) => {
+          counts.all += 1;
+          counts[normalizeStatus(thread.status)] += 1;
+          return counts;
+        },
+        { all: 0, 미완료: 0, 진행중: 0, 완료: 0 },
+      ),
+    [threads],
   );
-  const tagCounts = threads.reduce(
-    (counts, thread) => {
-      counts.all += 1;
+  const tagCounts = useMemo(
+    () =>
+      threads.reduce(
+        (counts, thread) => {
+          counts.all += 1;
 
-      if (thread.tagId) {
-        counts[thread.tagId] = (counts[thread.tagId] || 0) + 1;
-      } else {
-        counts.untagged += 1;
-      }
+          if (thread.tagId) {
+            counts[thread.tagId] = (counts[thread.tagId] || 0) + 1;
+          } else {
+            counts.untagged += 1;
+          }
 
-      return counts;
-    },
-    { all: 0, untagged: 0 },
+          return counts;
+        },
+        { all: 0, untagged: 0 },
+      ),
+    [threads],
   );
-  const pendingProfileRequests = profileRequests.filter((request) => request.status === "대기");
-  const studentThreadCounts = threads.reduce((counts, thread) => {
-    const key = studentKey(thread);
-    counts[key] = (counts[key] || 0) + 1;
-    return counts;
-  }, {});
+  const pendingProfileRequests = useMemo(
+    () => profileRequests.filter((request) => request.status === "대기"),
+    [profileRequests],
+  );
+  const studentThreadCounts = useMemo(
+    () =>
+      threads.reduce((counts, thread) => {
+        const key = studentKey(thread);
+        counts[key] = (counts[key] || 0) + 1;
+        return counts;
+      }, {}),
+    [threads],
+  );
   const saveThreadsFallback = (updater) => {
     setThreads((current) => {
       const next = typeof updater === "function" ? updater(current) : updater;
@@ -2985,7 +3023,18 @@ function ReplyPreviewBar({ onClear, replyTarget }) {
   );
 }
 
-function MessageBubble({
+const areMessageBubblePropsEqual = (previousProps, nextProps) =>
+  previousProps.actor === nextProps.actor &&
+  previousProps.message === nextProps.message &&
+  previousProps.editingMessageId === nextProps.editingMessageId &&
+  previousProps.editingText === nextProps.editingText &&
+  previousProps.activeMessageMenuId === nextProps.activeMessageMenuId &&
+  previousProps.activeReactionPickerId === nextProps.activeReactionPickerId &&
+  previousProps.emojiQuery === nextProps.emojiQuery &&
+  previousProps.isEmojiLoading === nextProps.isEmojiLoading &&
+  previousProps.reactionActorKey === nextProps.reactionActorKey;
+
+const MessageBubble = memo(function MessageBubble({
   actor,
   activeMessageMenuId,
   activeReactionPickerId,
@@ -3198,7 +3247,7 @@ function MessageBubble({
       )}
     </article>
   );
-}
+}, areMessageBubblePropsEqual);
 
 function AdminScreen({
   adminAuthed,
