@@ -5,6 +5,7 @@ import {
   unauthorized,
 } from "../errors.js";
 import { createGetThread } from "./councilService/createGetThread.js";
+import { createGetThreadMessages } from "./councilService/createGetThreadMessages.js";
 import { createListThreadSummaries } from "./councilService/createListThreadSummaries.js";
 import { createStudentRegisteredEventBuilder } from "./councilService/createStudentRegisteredEventBuilder.js";
 import { createStudentProfileSupport } from "./councilService/createStudentProfileSupport.js";
@@ -54,6 +55,9 @@ export const createCouncilService = ({
   const getThread = createGetThread({
     stateStore,
   });
+  const getThreadMessages = createGetThreadMessages({
+    stateStore,
+  });
 
   return {
     async getState() {
@@ -68,28 +72,7 @@ export const createCouncilService = ({
 
     getThread,
 
-    async getThreadMessages(threadId, options = {}) {
-      const state = await stateStore.read();
-      const thread = state.threads.find((item) => item.id === threadId);
-
-      if (!thread) {
-        throw notFound("Thread not found");
-      }
-
-      const page = paginateThreadMessages(thread, options);
-
-      return {
-        hasMore: page.hasMore,
-        limit: page.limit,
-        messages: page.messages,
-        nextCursor: page.nextCursor,
-        thread: {
-          id: thread.id,
-          messageCount: page.totalCount,
-          updatedAt: thread.updatedAt,
-        },
-      };
-    },
+    getThreadMessages,
 
     async listTags() {
       const state = await stateStore.read();
