@@ -95,7 +95,7 @@ export const createCouncilService = ({
 
     async listThreads() {
       const state = await stateStore.read();
-      return { threads: normalizeThreadsForClient(sortThreadsByActivity(state.threads)) };
+      return { threads: createThreadSummaries(sortThreadsByActivity(state.threads)) };
     },
 
     async listThreadSummaries() {
@@ -278,7 +278,7 @@ export const createCouncilService = ({
 
       return {
         profile,
-        threads: normalizeThreadsForClient(getVisibleThreads(state, profile)),
+        threads: createThreadSummaries(getVisibleThreads(state, profile)),
       };
     },
 
@@ -574,7 +574,7 @@ export const createCouncilService = ({
 
       return {
         thread,
-        threads: normalizeThreadsForClient(getVisibleThreads(outcome.state, profile)),
+        threads: createThreadSummaries(getVisibleThreads(outcome.state, profile)),
         domainEvents: outcome.events,
       };
     },
@@ -623,7 +623,7 @@ export const createCouncilService = ({
 
       return {
         thread,
-        threads: normalizeThreadsForClient(outcome.state.threads),
+        threads: createThreadSummaries(outcome.state.threads),
         domainEvents: outcome.events,
       };
     },
@@ -682,8 +682,8 @@ export const createCouncilService = ({
               thread,
               threads:
                 author === "student"
-                  ? normalizeThreadsForClient(getVisibleThreads(state, profile))
-                  : normalizeThreadsForClient(state.threads),
+                  ? createThreadSummaries(getVisibleThreads(state, profile))
+                  : createThreadSummaries(state.threads),
             },
           };
         }
@@ -734,7 +734,7 @@ export const createCouncilService = ({
         duplicate: Boolean(result?.duplicate),
         message: result?.message || null,
         thread: normalizeThreadForClient(result?.thread || null),
-        threads: result?.threads || normalizeThreadsForClient(state.threads),
+        threads: result?.threads || createThreadSummaries(state.threads),
         domainEvents: outcome.events,
       };
     },
@@ -804,8 +804,8 @@ export const createCouncilService = ({
             thread: nextThread,
             threads:
               author === "student"
-                ? normalizeThreadsForClient(getVisibleThreads(state, profile))
-                : normalizeThreadsForClient(state.threads),
+                ? createThreadSummaries(getVisibleThreads(state, profile))
+                : createThreadSummaries(state.threads),
           },
         };
       });
@@ -873,8 +873,8 @@ export const createCouncilService = ({
             thread: nextThread,
             threads:
               author === "student"
-                ? normalizeThreadsForClient(getVisibleThreads(state, profile))
-                : normalizeThreadsForClient(state.threads),
+                ? createThreadSummaries(getVisibleThreads(state, profile))
+                : createThreadSummaries(state.threads),
           },
         };
       });
@@ -914,7 +914,7 @@ export const createCouncilService = ({
 
       return {
         thread: normalizeThreadForClient(outcome.result.thread),
-        threads: normalizeThreadsForClient(outcome.state.threads),
+        threads: createThreadSummaries(outcome.state.threads),
         domainEvents: outcome.events,
       };
     },
@@ -956,7 +956,7 @@ export const createCouncilService = ({
 
       return {
         thread: normalizeThreadForClient(outcome.result.thread),
-        threads: normalizeThreadsForClient(getVisibleThreads(outcome.state, outcome.result.profile)),
+        threads: createThreadSummaries(getVisibleThreads(outcome.state, outcome.result.profile)),
         domainEvents: outcome.events,
       };
     },

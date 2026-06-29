@@ -2,7 +2,12 @@ import { createHash, randomUUID } from "node:crypto";
 import path from "node:path";
 
 import { createCouncilService } from "../application/services/createCouncilService.js";
-import { initialCouncilState, normalizeThreadForClient, normalizeThreadsForClient, sortThreadsByActivity } from "../domain/council/state.js";
+import {
+  createThreadSummary,
+  createThreadSummaries,
+  initialCouncilState,
+  sortThreadsByActivity,
+} from "../domain/council/state.js";
 import { applyCouncilEvent } from "../domain/council/reducer.js";
 import { createDurableEventDispatcher } from "../infrastructure/events/createDurableEventDispatcher.js";
 import { createEventBus } from "../infrastructure/events/createEventBus.js";
@@ -45,7 +50,7 @@ export const createServerRuntime = async ({ config }) => {
         {
           event: "sync",
           payload: {
-            threads: normalizeThreadsForClient(sortThreadsByActivity(state.threads)),
+            threads: createThreadSummaries(sortThreadsByActivity(state.threads)),
           },
         },
         {
@@ -74,7 +79,7 @@ export const createServerRuntime = async ({ config }) => {
     for (const event of events) {
       if (event.payload?.thread) {
         sseHub.broadcast("thread", {
-          thread: normalizeThreadForClient(event.payload.thread),
+          thread: createThreadSummary(event.payload.thread),
         });
       }
 

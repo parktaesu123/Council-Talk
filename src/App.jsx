@@ -302,7 +302,7 @@ function App() {
       body: JSON.stringify(studentProfile),
     })
       .then((data) => {
-        setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+        setThreads(toThreadSummaries(data.threads));
         setStudentProfile((current) => {
           if (!current) {
             return current;
@@ -345,7 +345,7 @@ function App() {
     events.addEventListener("sync", (event) => {
       try {
         const data = JSON.parse(event.data);
-        setThreads(normalizeThreads(data.threads));
+        setThreads(toThreadSummaries(data.threads));
       } catch {
         loadAdminData();
       }
@@ -1337,7 +1337,7 @@ function App() {
       });
       setProfileRequests(data.requests || []);
       setStudents(data.students || []);
-      setThreads(data.threads.map((thread) => ({ ...thread, status: normalizeStatus(thread.status) })));
+      setThreads(toThreadSummaries(data.threads));
     } catch {
       await loadAdminData();
     }
