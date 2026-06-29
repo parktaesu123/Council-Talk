@@ -10,6 +10,7 @@ import {
 } from "../domain/council/state.js";
 import { applyCouncilEvent } from "../domain/council/reducer.js";
 import { createDurableEventDispatcher } from "../infrastructure/events/createDurableEventDispatcher.js";
+import { createEmojiHubClient } from "../infrastructure/emoji/createEmojiHubClient.js";
 import { createEventBus } from "../infrastructure/events/createEventBus.js";
 import { consoleLogger } from "../infrastructure/logging/consoleLogger.js";
 import { createNotificationHandlers } from "../infrastructure/notifications/createNotificationHandlers.js";
@@ -68,6 +69,7 @@ export const createServerRuntime = async ({ config }) => {
     logger,
     queryState: () => service.getState(),
   });
+  const emojiHubClient = createEmojiHubClient();
   const durableDispatcher = createDurableEventDispatcher({
     cursorFilePath: path.join(config.dataDir, "events", "notification-cursor.json"),
     eventStore,
@@ -100,6 +102,7 @@ export const createServerRuntime = async ({ config }) => {
         .slice(0, 32),
     config,
     durableDispatcher,
+    emojiHubClient,
     eventBus,
     logger,
     service,

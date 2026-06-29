@@ -101,6 +101,15 @@ export const createHttpApp = ({ runtime }) => {
     response.json(getMailStatus(runtime.config));
   });
 
+  app.get("/api/emojis", createRouteHandler(async (request, response) => {
+    response.json({
+      emojis: await runtime.emojiHubClient.search({
+        limit: request.query.limit,
+        query: request.query.q,
+      }),
+    });
+  }));
+
   app.post("/api/notification-emails", createRouteHandler(async (request, response) => {
     response.status(201).json(await runtime.service.createNotificationEmail(request.body || {}));
   }));
