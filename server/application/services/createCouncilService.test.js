@@ -259,3 +259,49 @@ test("daisu can generate an automatic reply from published knowledge", async () 
   assert.match(reply.assistantMessage.text, /수강 정정/);
   assert.equal(reply.log.matchedDocumentIds.length, 1);
 });
+
+test("daisu introduces itself and admits when it does not know", async () => {
+  const service = await createTestService();
+
+  await service.signupStudent({
+    studentId: "1234",
+    name: "홍길동",
+    pin: "1111",
+    email: "student@example.com",
+  });
+
+  await service.updateDaiSuSettings({
+    autoReplyEnabled: true,
+    confidenceThreshold: 10,
+  });
+
+  const introThread = await service.createThread({
+    studentId: "1234",
+    name: "홍길동",
+    pin: "1111",
+    title: "따이수와 대화",
+    content: "너 누구야?",
+  });
+
+  const introReply = await service.generateDaiSuReplyForThread(
+    introThread.thread.id,
+    introThread.thread.messages[0].id,
+  );
+
+  assert.match(introReply.assistantMessage.text, /학생회 관련 문의를 도와주는 봇/);
+
+  const unknownThread = await service.createThread({
+    studentId: "1234",
+    name: "홍길동",
+    pin: "1111",
+    title: "따이수와 대화",
+    content: "양자중력 해석에 대해 알려줘",
+  });
+
+  const unknownReply = await service.generateDaiSuReplyForThread(
+    unknownThread.thread.id,
+    unknownThread.thread.messages[0].id,
+  );
+
+  assert.match(unknownReply.assistantMessage.text, /모르겠어요/);
+});

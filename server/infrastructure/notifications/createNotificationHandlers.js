@@ -2,6 +2,8 @@ import nodemailer from "nodemailer";
 
 import { normalizeThreadStatus, studentKey } from "../../domain/council/state.js";
 
+const isDaiSuThread = (thread) => String(thread?.title || "").trim() === "따이수와 대화";
+
 const escapeHtml = (value) =>
   String(value)
     .replace(/&/g, "&amp;")
@@ -42,6 +44,10 @@ export const createNotificationHandlers = ({
       return;
     }
 
+    if (isDaiSuThread(thread)) {
+      return;
+    }
+
     try {
       const response = await fetch(config.discordWebhookUrl, {
         method: "POST",
@@ -73,6 +79,10 @@ export const createNotificationHandlers = ({
   };
 
   const sendAdminEmail = async (thread) => {
+    if (isDaiSuThread(thread)) {
+      return;
+    }
+
     const state = await queryState();
     const recipients = state.notificationEmails.map((item) => item.email).filter(Boolean);
 
@@ -115,6 +125,10 @@ export const createNotificationHandlers = ({
   };
 
   const sendStudentReplyEmail = async (thread) => {
+    if (isDaiSuThread(thread)) {
+      return;
+    }
+
     const state = await queryState();
     const student = state.students[studentKey(thread)];
     const recipient = student?.email;

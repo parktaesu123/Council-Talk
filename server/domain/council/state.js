@@ -9,7 +9,7 @@ export const initialCouncilState = {
     tone: "친절하고 간결하게 답변합니다.",
     guardrails: [],
     fallbackMessage:
-      "현재 등록된 안내만으로는 정확한 답변이 어려워 학생회 담당자에게 연결하는 것이 안전합니다.",
+      "미안하지만 지금은 그 질문에 대해 정확히 모르겠어요. 학생회 담당자가 이어서 확인할 수 있도록 조금 더 자세히 남겨주세요.",
     autoReplyEnabled: false,
     autoReplyTags: [],
     confidenceThreshold: 6,

@@ -12,6 +12,12 @@ const tokenize = (value) =>
     .filter((token) => token.length >= 2);
 
 const unique = (items) => [...new Set(items)];
+const includesAny = (text, patterns) => patterns.some((pattern) => text.includes(pattern));
+const buildIdentityReply = (assistant) =>
+  `나는 학생회 관련 문의를 도와주는 봇 ${assistant.name}야. 학생회가 등록한 안내를 바탕으로 먼저 답변하고, 필요한 경우 학생회 담당자가 이어서 확인해줄게.`;
+const buildUnknownReply = (assistant) =>
+  assistant.fallbackMessage ||
+  "미안하지만 지금은 그 질문에 대해 정확히 모르겠어요. 학생회 담당자가 이어서 확인할 수 있도록 조금 더 자세히 남겨주세요.";
 
 const scoreDocument = (document, tokens) => {
   const title = normalizeDaiSuText(document.title, 160).toLowerCase();
@@ -69,13 +75,32 @@ const extractRelevantLines = (content, tokens) => {
 
 export const createDaiSuResponder = () => ({
   buildReply({ assistant, state, studentMessage, thread }) {
+    const rawQuestion = normalizeDaiSuText(studentMessage.text, 2000).toLowerCase();
     const tokens = unique(tokenize(studentMessage.text));
     const publishedDocuments = listPublishedDaiSuDocuments(state);
+
+    if (
+      includesAny(rawQuestion, [
+        "너 누구야",
+        "누구야",
+        "뭐하는",
+        "정체가 뭐야",
+        "너는 누구",
+        "따이수",
+      ])
+    ) {
+      return {
+        matchedDocuments: [],
+        replyText: buildIdentityReply(assistant),
+        score: 100,
+        usedFallback: false,
+      };
+    }
 
     if (tokens.length === 0 || publishedDocuments.length === 0) {
       return {
         matchedDocuments: [],
-        replyText: assistant.fallbackMessage,
+        replyText: buildUnknownReply(assistant),
         score: 0,
         usedFallback: true,
       };
@@ -92,7 +117,7 @@ export const createDaiSuResponder = () => ({
     if (!top || top.score < assistant.confidenceThreshold) {
       return {
         matchedDocuments: ranked.map((item) => item.document),
-        replyText: assistant.fallbackMessage,
+        replyText: buildUnknownReply(assistant),
         score: top?.score || 0,
         usedFallback: true,
       };
