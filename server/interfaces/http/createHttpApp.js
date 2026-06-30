@@ -110,6 +110,48 @@ export const createHttpApp = ({ runtime }) => {
     });
   }));
 
+  app.get("/api/daisu", createRouteHandler(async (_request, response) => {
+    response.json(await runtime.service.getDaiSuState());
+  }));
+
+  app.put("/api/daisu/settings", createRouteHandler(async (request, response) => {
+    const result = await runtime.service.updateDaiSuSettings(request.body || {});
+    await runtime.handleCommittedEvents(result.domainEvents);
+    response.json({
+      assistant: result.assistant,
+    });
+  }));
+
+  app.get("/api/daisu/answer-logs", createRouteHandler(async (_request, response) => {
+    response.json(await runtime.service.listDaiSuAnswerLogs());
+  }));
+
+  app.post("/api/daisu/documents", createRouteHandler(async (request, response) => {
+    const result = await runtime.service.createDaiSuDocument(request.body || {});
+    await runtime.handleCommittedEvents(result.domainEvents);
+    response.status(201).json({
+      document: result.document,
+      documents: result.documents,
+    });
+  }));
+
+  app.patch("/api/daisu/documents/:id", createRouteHandler(async (request, response) => {
+    const result = await runtime.service.updateDaiSuDocument(request.params.id, request.body || {});
+    await runtime.handleCommittedEvents(result.domainEvents);
+    response.json({
+      document: result.document,
+      documents: result.documents,
+    });
+  }));
+
+  app.delete("/api/daisu/documents/:id", createRouteHandler(async (request, response) => {
+    const result = await runtime.service.deleteDaiSuDocument(request.params.id);
+    await runtime.handleCommittedEvents(result.domainEvents);
+    response.json({
+      documents: result.documents,
+    });
+  }));
+
   app.post("/api/notification-emails", createRouteHandler(async (request, response) => {
     response.status(201).json(await runtime.service.createNotificationEmail(request.body || {}));
   }));
