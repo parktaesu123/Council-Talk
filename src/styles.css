@@ -166,6 +166,61 @@ textarea:focus {
   padding-bottom: 12vh;
 }
 
+.daisu-hero {
+  display: grid;
+  grid-template-columns: 1.1fr 0.9fr;
+  gap: 24px;
+  width: min(1120px, 100%);
+  padding: 28px;
+  border: 1px solid var(--line);
+  border-radius: 26px;
+  background: linear-gradient(135deg, #fff8df 0%, #fff1c5 100%);
+  box-shadow: var(--shadow);
+}
+
+.daisu-hero-copy {
+  display: grid;
+  gap: 10px;
+  align-content: center;
+}
+
+.daisu-hero-copy p {
+  margin: 0;
+  color: #8a6108;
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.daisu-hero-copy h2 {
+  margin: 0;
+  font-size: clamp(30px, 4vw, 46px);
+  line-height: 0.95;
+}
+
+.daisu-hero-copy span {
+  color: #67572a;
+  font-size: 15px;
+  line-height: 1.6;
+}
+
+.daisu-hero-compose {
+  display: grid;
+  gap: 12px;
+  align-content: center;
+}
+
+.daisu-hero-compose textarea {
+  min-height: 132px;
+  border-radius: 18px;
+  background: rgba(255, 255, 255, 0.88);
+}
+
+.daisu-hero-actions {
+  display: flex;
+  justify-content: flex-end;
+}
+
 .wordmark {
   display: flex;
   align-items: center;
@@ -2335,6 +2390,10 @@ textarea:focus {
   }
 
   .profile-layout {
+    grid-template-columns: 1fr;
+  }
+
+  .daisu-hero {
     grid-template-columns: 1fr;
   }
 

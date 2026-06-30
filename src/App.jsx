@@ -59,6 +59,7 @@ const emptyDaiSuDocumentForm = {
   content: "",
   status: "draft",
 };
+const emptyDaiSuPrompt = "";
 
 const getTimeLabel = () =>
   new Intl.DateTimeFormat("ko-KR", {
@@ -254,6 +255,8 @@ function App() {
   const [daiSuAnswerLogs, setDaiSuAnswerLogs] = useState([]);
   const [daiSuDocumentForm, setDaiSuDocumentForm] = useState(emptyDaiSuDocumentForm);
   const [editingDaiSuDocumentId, setEditingDaiSuDocumentId] = useState("");
+  const [daiSuPrompt, setDaiSuPrompt] = useState(emptyDaiSuPrompt);
+  const [pendingDaiSuPrompt, setPendingDaiSuPrompt] = useState("");
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [currentThreadDetail, setCurrentThreadDetail] = useState(null);
   const [currentThreadHasMore, setCurrentThreadHasMore] = useState(false);
@@ -792,6 +795,23 @@ function App() {
   }, [studentProfile]);
 
   useEffect(() => {
+    if (editingDaiSuDocumentId) {
+      return;
+    }
+
+    const primaryDocument = daiSuDocuments[0] || null;
+    setDaiSuDocumentForm((current) => ({
+      ...current,
+      title: primaryDocument?.title || "따이수 참고 내용",
+      category: primaryDocument?.category || "학생회",
+      tags: (primaryDocument?.tags || []).join(", "),
+      keywords: (primaryDocument?.keywords || []).join(", "),
+      content: primaryDocument?.content || "",
+      status: primaryDocument?.status || "published",
+    }));
+  }, [daiSuDocuments, editingDaiSuDocumentId]);
+
+  useEffect(() => {
     if (isAdminRoute && adminSection === "inquiries" && !selectedThreadId && threads.length > 0) {
       setSelectedThreadId(threads[0].id);
       if (!getAdminThreadIdFromPath(route)) {
@@ -1019,6 +1039,11 @@ function App() {
       return;
     }
 
+    if (authTarget === "daisu" && pendingDaiSuPrompt.trim()) {
+      void submitDaiSuPrompt(pendingDaiSuPrompt, nextProfile, toThreadSummaries(data.threads));
+      return;
+    }
+
     const routeThreadId = getSupportThreadIdFromPath(window.location.pathname);
     if (routeThreadId && data.threads.some((thread) => thread.id === routeThreadId)) {
       setCurrentThreadId(routeThreadId);
@@ -1108,6 +1133,79 @@ function App() {
     setIdentityError("");
     setAuthMode("login");
     setSupportView("rooms");
+  };
+
+  const findDaiSuThread = (profile, sourceThreads = threads) =>
+    (sourceThreads || []).find(
+      (thread) =>
+        thread.studentId === profile?.studentId &&
+        thread.name === profile?.name &&
+        thread.title === "따이수와 대화" &&
+        normalizeStatus(thread.status) !== "완료",
+    ) || null;
+
+  const submitDaiSuPrompt = async (rawPrompt, profileOverride = studentProfile, sourceThreads = threads) => {
+    const prompt = String(rawPrompt || "").trim();
+
+    if (!prompt) {
+      return;
+    }
+
+    if (!profileOverride) {
+      setPendingDaiSuPrompt(prompt);
+      setAuthTarget("daisu");
+      setAuthMode("login");
+      setIdentityError("");
+      setIsSupportOpen(true);
+      return;
+    }
+
+    setPendingDaiSuPrompt("");
+    setDaiSuPrompt("");
+    setIsSupportOpen(true);
+
+    const existingThread = findDaiSuThread(profileOverride, sourceThreads);
+
+    if (existingThread) {
+      const data = await apiRequest(`/api/threads/${existingThread.id}/messages`, {
+        method: "POST",
+        body: JSON.stringify({
+          author: "student",
+          studentId: profileOverride.studentId,
+          name: profileOverride.name,
+          pin: profileOverride.pin,
+          text: prompt,
+        }),
+      });
+      setThreads((current) => mergeThreadList(current, data.thread));
+      const detail = await loadThreadMessages(existingThread.id);
+      setCurrentThreadDetail(buildThreadDetail(data.thread || existingThread, detail));
+      setCurrentThreadHasMore(Boolean(detail.hasMore));
+      setCurrentThreadNextCursor(detail.nextCursor || null);
+      setCurrentThreadId(existingThread.id);
+      setSupportView("chat");
+      navigateTo(getSupportThreadPath(existingThread.id));
+      return;
+    }
+
+    const created = await apiRequest("/api/threads", {
+      method: "POST",
+      body: JSON.stringify({
+        studentId: profileOverride.studentId,
+        name: profileOverride.name,
+        pin: profileOverride.pin,
+        title: "따이수와 대화",
+        content: prompt,
+      }),
+    });
+
+    setThreads((current) => mergeThreadList(current, created.thread));
+    setCurrentThreadDetail(created.thread);
+    setCurrentThreadHasMore(false);
+    setCurrentThreadNextCursor(null);
+    setCurrentThreadId(created.thread.id);
+    setSupportView("chat");
+    navigateTo(getSupportThreadPath(created.thread.id));
   };
 
   const handleProfileChangeRequest = async (event) => {
@@ -1754,32 +1852,42 @@ function App() {
   const handleDaiSuDocumentSubmit = async (event) => {
     event.preventDefault();
 
+    const primaryDocument = daiSuDocuments[0] || null;
     const payload = {
-      title: daiSuDocumentForm.title.trim(),
-      category: daiSuDocumentForm.category.trim(),
-      tags: daiSuDocumentForm.tags,
-      keywords: daiSuDocumentForm.keywords,
+      title: "따이수 참고 내용",
+      category: "학생회",
+      tags: [],
+      keywords: [],
       content: daiSuDocumentForm.content.trim(),
-      status: daiSuDocumentForm.status,
+      status: "published",
     };
 
-    if (!payload.title || !payload.content) {
+    if (!payload.content) {
       return;
     }
 
-    const path = editingDaiSuDocumentId
-      ? `/api/daisu/documents/${editingDaiSuDocumentId}`
+    const path = primaryDocument
+      ? `/api/daisu/documents/${primaryDocument.id}`
       : "/api/daisu/documents";
-    const method = editingDaiSuDocumentId ? "PATCH" : "POST";
+    const method = primaryDocument ? "PATCH" : "POST";
 
     const data = await apiRequest(path, {
       method,
       body: JSON.stringify(payload),
     });
 
+    const settings = await apiRequest("/api/daisu/settings", {
+      method: "PUT",
+      body: JSON.stringify({
+        ...(daiSuAssistant || {}),
+        autoReplyEnabled: true,
+        confidenceThreshold: 1,
+      }),
+    });
+
     setDaiSuDocuments(data.documents || []);
-    setDaiSuDocumentForm(emptyDaiSuDocumentForm);
-    setEditingDaiSuDocumentId("");
+    setDaiSuAssistant(settings.assistant || daiSuAssistant);
+    setEditingDaiSuDocumentId(primaryDocument?.id || "");
   };
 
   const handleDaiSuDocumentEdit = (document) => {
@@ -2101,6 +2209,9 @@ function App() {
           <button className={route === "/" ? "active" : ""} onClick={() => navigateTo("/")} type="button">
             홈
           </button>
+          <button onClick={() => submitDaiSuPrompt(daiSuPrompt || "학생회에 궁금한 점이 있어요.")} type="button">
+            따이수
+          </button>
           <button className={route.startsWith("/support") ? "active" : ""} onClick={openSupport} type="button">
             문의하기
           </button>
@@ -2112,6 +2223,31 @@ function App() {
 
       {publicView === "home" ? (
         <section className="logo-stage" aria-label="Council Talk">
+          <section className="daisu-hero">
+            <div className="daisu-hero-copy">
+              <p>AI Student Council Helper</p>
+              <h2>따이수에게 바로 물어보세요</h2>
+              <span>학생회가 등록한 안내를 바탕으로 먼저 답변해드리고, 필요한 경우 학생회가 이어서 확인합니다.</span>
+            </div>
+            <div className="daisu-hero-compose">
+              <textarea
+                rows={4}
+                value={daiSuPrompt}
+                onChange={(event) => setDaiSuPrompt(event.target.value)}
+                placeholder="예: 수강 정정은 언제까지 가능한가요?"
+              />
+              <div className="daisu-hero-actions">
+                <button
+                  className="support-launcher"
+                  onClick={() => submitDaiSuPrompt(daiSuPrompt)}
+                  type="button"
+                >
+                  <MessageCircle size={18} />
+                  따이수와 대화
+                </button>
+              </div>
+            </div>
+          </section>
           <div className="wordmark">
             <span className="wordmark-symbol" aria-hidden="true">C</span>
             <h1>Council Talk</h1>
@@ -3110,17 +3246,9 @@ function NotificationAdminPanel({
 }
 
 function DaiSuAdminPanel({
-  answerLogs,
-  assistant,
   documentForm,
-  documents,
-  editingDocumentId,
-  handleDocumentDelete,
-  handleDocumentEdit,
   handleDocumentSubmit,
-  handleSettingsChange,
   setDocumentForm,
-  setEditingDocumentId,
 }) {
   return (
     <div className="daisu-admin-page">
@@ -3128,194 +3256,23 @@ function DaiSuAdminPanel({
         <header>
           <div>
             <p>DaiSu Assistant</p>
-            <h2>따이수 설정</h2>
-          </div>
-        </header>
-        <label>
-          이름
-          <input
-            value={assistant?.name || ""}
-            onChange={(event) => handleSettingsChange({ name: event.target.value })}
-          />
-        </label>
-        <label>
-          소개
-          <textarea
-            rows={2}
-            value={assistant?.description || ""}
-            onChange={(event) => handleSettingsChange({ description: event.target.value })}
-          />
-        </label>
-        <label>
-          말투
-          <textarea
-            rows={2}
-            value={assistant?.tone || ""}
-            onChange={(event) => handleSettingsChange({ tone: event.target.value })}
-          />
-        </label>
-        <label>
-          fallback 답변
-          <textarea
-            rows={3}
-            value={assistant?.fallbackMessage || ""}
-            onChange={(event) => handleSettingsChange({ fallbackMessage: event.target.value })}
-          />
-        </label>
-        <label className="toggle-line">
-          <input
-            checked={Boolean(assistant?.autoReplyEnabled)}
-            onChange={(event) => handleSettingsChange({ autoReplyEnabled: event.target.checked })}
-            type="checkbox"
-          />
-          자동응답 사용
-        </label>
-        <label>
-          자동응답 태그 필터
-          <input
-            value={(assistant?.autoReplyTags || []).join(", ")}
-            onChange={(event) => handleSettingsChange({ autoReplyTags: event.target.value })}
-            placeholder="예: 학사, 장학, tag-id"
-          />
-        </label>
-        <label>
-          최소 신뢰도
-          <input
-            max="50"
-            min="1"
-            type="number"
-            value={assistant?.confidenceThreshold || 6}
-            onChange={(event) => handleSettingsChange({ confidenceThreshold: Number(event.target.value) })}
-          />
-        </label>
-        <label>
-          답변 가드레일
-          <textarea
-            rows={4}
-            value={(assistant?.guardrails || []).join("\n")}
-            onChange={(event) => handleSettingsChange({ guardrails: event.target.value })}
-            placeholder="한 줄에 하나씩 입력"
-          />
-        </label>
-      </section>
-
-      <section className="daisu-card">
-        <header>
-          <div>
-            <p>Knowledge Base</p>
-            <h2>지식 문서</h2>
+            <h2>따이수 참고 내용</h2>
           </div>
         </header>
         <form className="daisu-document-form" onSubmit={handleDocumentSubmit}>
           <label>
-            제목
-            <input
-              value={documentForm.title}
-              onChange={(event) => setDocumentForm((current) => ({ ...current, title: event.target.value }))}
-            />
-          </label>
-          <label>
-            카테고리
-            <input
-              value={documentForm.category}
-              onChange={(event) => setDocumentForm((current) => ({ ...current, category: event.target.value }))}
-            />
-          </label>
-          <label>
-            태그
-            <input
-              value={documentForm.tags}
-              onChange={(event) => setDocumentForm((current) => ({ ...current, tags: event.target.value }))}
-              placeholder="쉼표로 구분"
-            />
-          </label>
-          <label>
-            키워드
-            <input
-              value={documentForm.keywords}
-              onChange={(event) => setDocumentForm((current) => ({ ...current, keywords: event.target.value }))}
-              placeholder="쉼표로 구분"
-            />
-          </label>
-          <label>
-            상태
-            <select
-              value={documentForm.status}
-              onChange={(event) => setDocumentForm((current) => ({ ...current, status: event.target.value }))}
-            >
-              <option value="draft">draft</option>
-              <option value="published">published</option>
-              <option value="archived">archived</option>
-            </select>
-          </label>
-          <label>
-            본문
+            답변 참고 내용
             <textarea
-              rows={8}
+              rows={18}
               value={documentForm.content}
               onChange={(event) => setDocumentForm((current) => ({ ...current, content: event.target.value }))}
+              placeholder="학생회 규정, 자주 묻는 질문, 처리 기준, 주의 문구를 길게 적어두면 따이수가 답변할 때 참고합니다."
             />
           </label>
           <div className="daisu-form-actions">
-            <button className="black-button" type="submit">
-              {editingDocumentId ? "문서 수정" : "문서 추가"}
-            </button>
-            {editingDocumentId && (
-              <button
-                className="ghost-button"
-                onClick={() => {
-                  setEditingDocumentId("");
-                  setDocumentForm(emptyDaiSuDocumentForm);
-                }}
-                type="button"
-              >
-                취소
-              </button>
-            )}
+            <button className="black-button" type="submit">저장</button>
           </div>
         </form>
-
-        <div className="daisu-document-list">
-          {documents.map((document) => (
-            <article className="daisu-document-item" key={document.id}>
-              <div>
-                <strong>{document.title}</strong>
-                <span>
-                  {document.category || "미분류"} · {document.status}
-                </span>
-                <p>{document.content}</p>
-              </div>
-              <div className="daisu-document-actions">
-                <button onClick={() => handleDocumentEdit(document)} type="button">
-                  수정
-                </button>
-                <button onClick={() => handleDocumentDelete(document.id)} type="button">
-                  삭제
-                </button>
-              </div>
-            </article>
-          ))}
-        </div>
-      </section>
-
-      <section className="daisu-card">
-        <header>
-          <div>
-            <p>Answer Log</p>
-            <h2>자동응답 기록</h2>
-          </div>
-        </header>
-        <div className="daisu-log-list">
-          {answerLogs.length === 0 && <p className="empty-copy">아직 따이수 답변 기록이 없습니다.</p>}
-          {answerLogs.map((log) => (
-            <article className="daisu-log-item" key={log.id}>
-              <strong>{log.mode}</strong>
-              <span>thread: {log.threadId}</span>
-              <span>score: {log.score}</span>
-              <small>{log.matchedDocumentIds.join(", ") || "근거 문서 없음"}</small>
-            </article>
-          ))}
-        </div>
       </section>
     </div>
   );
@@ -3932,17 +3889,9 @@ function AdminScreen({
           />
         ) : adminSection === "daisu" ? (
           <DaiSuAdminPanel
-            answerLogs={daiSuAnswerLogs}
-            assistant={daiSuAssistant}
             documentForm={daiSuDocumentForm}
-            documents={daiSuDocuments}
-            editingDocumentId={editingDaiSuDocumentId}
-            handleDocumentDelete={handleDaiSuDocumentDelete}
-            handleDocumentEdit={handleDaiSuDocumentEdit}
             handleDocumentSubmit={handleDaiSuDocumentSubmit}
-            handleSettingsChange={handleDaiSuSettingsChange}
             setDocumentForm={setDaiSuDocumentForm}
-            setEditingDocumentId={setEditingDaiSuDocumentId}
           />
         ) : selectedThread ? (
           <>
