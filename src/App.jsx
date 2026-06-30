@@ -3375,7 +3375,7 @@ const MessageBubble = memo(function MessageBubble({
   const isReactionPickerOpen = activeReactionPickerId === message.id;
 
   return (
-    <article className={`bubble ${message.author}`} key={message.id}>
+    <article className={`bubble ${message.author} ${message.assistant ? "assistant-bubble" : ""}`} key={message.id}>
       {!isEditing && onReply && isOwnMessage && (
         <button
           aria-label="답장"
@@ -3481,7 +3481,10 @@ const MessageBubble = memo(function MessageBubble({
         </div>
       )}
       <div className="message-meta">
-        <strong>{message.authorLabel}</strong>
+        <strong>
+          {message.authorLabel}
+          {message.assistant && <em className="assistant-badge">따이수</em>}
+        </strong>
         <span>
           {message.time}
           {message.editedAt ? " · 수정됨" : ""}
@@ -3537,6 +3540,14 @@ const MessageBubble = memo(function MessageBubble({
             </div>
           )}
           <p>{message.text}</p>
+          {message.assistant && (
+            <small className="assistant-meta">
+              신뢰도 {message.assistant.confidence || 0}
+              {Array.isArray(message.assistant.matchedDocumentIds) &&
+                message.assistant.matchedDocumentIds.length > 0 &&
+                ` · 근거 ${message.assistant.matchedDocumentIds.length}건`}
+            </small>
+          )}
           {Array.isArray(message.reactions) && message.reactions.length > 0 && (
             <div className="message-reactions" onClick={(event) => event.stopPropagation()}>
               {message.reactions.map((reaction) => {
