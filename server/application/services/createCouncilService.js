@@ -13,6 +13,12 @@ import { createSignupStudent } from "./councilService/createSignupStudent.js";
 import { createUpdateStudentEmail } from "./councilService/createUpdateStudentEmail.js";
 import { createStudentRegisteredEventBuilder } from "./councilService/createStudentRegisteredEventBuilder.js";
 import { createStudentProfileSupport } from "./councilService/createStudentProfileSupport.js";
+import { createGetDaiSuState } from "./councilService/createGetDaiSuState.js";
+import { createUpdateDaiSuSettings } from "./councilService/createUpdateDaiSuSettings.js";
+import { createCreateDaiSuDocument } from "./councilService/createCreateDaiSuDocument.js";
+import { createUpdateDaiSuDocument } from "./councilService/createUpdateDaiSuDocument.js";
+import { createDeleteDaiSuDocument } from "./councilService/createDeleteDaiSuDocument.js";
+import { createListDaiSuAnswerLogs } from "./councilService/createListDaiSuAnswerLogs.js";
 import { createDomainEvent } from "../../domain/shared/domainEvent.js";
 import {
   canManageMessage,
@@ -81,6 +87,28 @@ export const createCouncilService = ({
   const updateStudentEmail = createUpdateStudentEmail({
     clock,
     ensureStudentProfile,
+    stateStore,
+  });
+  const getDaiSuState = createGetDaiSuState({
+    stateStore,
+  });
+  const updateDaiSuSettings = createUpdateDaiSuSettings({
+    clock,
+    stateStore,
+  });
+  const createDaiSuDocument = createCreateDaiSuDocument({
+    clock,
+    idGenerator,
+    stateStore,
+  });
+  const updateDaiSuDocument = createUpdateDaiSuDocument({
+    clock,
+    stateStore,
+  });
+  const deleteDaiSuDocument = createDeleteDaiSuDocument({
+    stateStore,
+  });
+  const listDaiSuAnswerLogs = createListDaiSuAnswerLogs({
     stateStore,
   });
 
@@ -220,6 +248,18 @@ export const createCouncilService = ({
     updateStudentEmail,
 
     listStudents,
+
+    getDaiSuState,
+
+    updateDaiSuSettings,
+
+    createDaiSuDocument,
+
+    updateDaiSuDocument,
+
+    deleteDaiSuDocument,
+
+    listDaiSuAnswerLogs,
 
     async requestProfileChange(payload) {
       const state = await stateStore.read();

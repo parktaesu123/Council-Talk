@@ -177,3 +177,43 @@ test("message reactions toggle and persist on the target message", async () => {
   loaded = await service.getThread(created.thread.id);
   assert.deepEqual(loaded.thread.messages[0].reactions, []);
 });
+
+test("daisu settings and documents can be managed by the service", async () => {
+  const service = await createTestService();
+
+  const settings = await service.updateDaiSuSettings({
+    autoReplyEnabled: true,
+    confidenceThreshold: 9,
+    fallbackMessage: "학생회가 이어서 확인할게요.",
+    guardrails: ["근거 없는 확답 금지"],
+  });
+
+  assert.equal(settings.assistant.autoReplyEnabled, true);
+  assert.equal(settings.assistant.confidenceThreshold, 9);
+
+  const created = await service.createDaiSuDocument({
+    title: "수강 정정 안내",
+    category: "학사",
+    tags: ["학사", "수강정정"],
+    keywords: ["정정", "수강"],
+    content: "수강 정정은 개강 첫 주 금요일까지 가능합니다.",
+    status: "published",
+  });
+
+  assert.equal(created.document.status, "published");
+
+  const updated = await service.updateDaiSuDocument(created.document.id, {
+    content: "수강 정정은 개강 첫 주 금요일 18시까지 가능합니다.",
+    status: "published",
+  });
+
+  assert.match(updated.document.content, /18시/);
+
+  const daisuState = await service.getDaiSuState();
+  assert.equal(daisuState.documents.length, 1);
+  assert.equal(daisuState.assistant.autoReplyEnabled, true);
+
+  await service.deleteDaiSuDocument(created.document.id);
+  const deletedState = await service.getDaiSuState();
+  assert.equal(deletedState.documents.length, 0);
+});
