@@ -24,8 +24,9 @@ const FILTERS = [
   { label: "진행중", value: "진행중" },
   { label: "완료", value: "완료" },
 ];
-const ADMIN_SECTIONS = ["inquiries", "tags", "students", "requests"];
+const ADMIN_SECTIONS = ["inquiries", "tags", "students", "requests", "daisu"];
 const ADMIN_SECTION_PATHS = {
+  daisu: "/admin/daisu",
   inquiries: "/admin/inquiries",
   tags: "/admin/tags",
   students: "/admin/students",
@@ -49,6 +50,14 @@ const emptyIdentity = {
 const emptyProfileChangeForm = {
   studentId: "",
   name: "",
+};
+const emptyDaiSuDocumentForm = {
+  title: "",
+  category: "",
+  tags: "",
+  keywords: "",
+  content: "",
+  status: "draft",
 };
 
 const getTimeLabel = () =>
@@ -240,6 +249,11 @@ function App() {
   const [tags, setTags] = useState([]);
   const [students, setStudents] = useState([]);
   const [profileRequests, setProfileRequests] = useState([]);
+  const [daiSuAssistant, setDaiSuAssistant] = useState(null);
+  const [daiSuDocuments, setDaiSuDocuments] = useState([]);
+  const [daiSuAnswerLogs, setDaiSuAnswerLogs] = useState([]);
+  const [daiSuDocumentForm, setDaiSuDocumentForm] = useState(emptyDaiSuDocumentForm);
+  const [editingDaiSuDocumentId, setEditingDaiSuDocumentId] = useState("");
   const [isSupportOpen, setIsSupportOpen] = useState(false);
   const [currentThreadDetail, setCurrentThreadDetail] = useState(null);
   const [currentThreadHasMore, setCurrentThreadHasMore] = useState(false);
@@ -952,17 +966,22 @@ function App() {
 
   const loadAdminData = async () => {
     try {
-      const [threadData, tagData, studentData, requestData] = await Promise.all([
+      const [threadData, tagData, studentData, requestData, daiSuData, daiSuLogs] = await Promise.all([
         apiRequest("/api/thread-summaries"),
         apiRequest("/api/tags"),
         apiRequest("/api/students"),
         apiRequest("/api/profile-requests"),
+        apiRequest("/api/daisu"),
+        apiRequest("/api/daisu/answer-logs"),
       ]);
       const nextThreads = toThreadSummaries(threadData.threads);
       setThreads(nextThreads);
       setTags(normalizeTags(tagData.tags));
       setStudents(studentData.students || []);
       setProfileRequests(requestData.requests || []);
+      setDaiSuAssistant(daiSuData.assistant || null);
+      setDaiSuDocuments(daiSuData.documents || []);
+      setDaiSuAnswerLogs(daiSuLogs.answerLogs || []);
 
       if (deepLinkedThreadId && nextThreads.some((thread) => thread.id === deepLinkedThreadId)) {
         setSelectedThreadId(deepLinkedThreadId);
@@ -1716,6 +1735,76 @@ function App() {
     }
   };
 
+  const handleDaiSuSettingsChange = async (patch) => {
+    const current = daiSuAssistant || {};
+    const next = { ...current, ...patch };
+    setDaiSuAssistant(next);
+
+    try {
+      const data = await apiRequest("/api/daisu/settings", {
+        method: "PUT",
+        body: JSON.stringify(next),
+      });
+      setDaiSuAssistant(data.assistant || next);
+    } catch {
+      setDaiSuAssistant(current);
+    }
+  };
+
+  const handleDaiSuDocumentSubmit = async (event) => {
+    event.preventDefault();
+
+    const payload = {
+      title: daiSuDocumentForm.title.trim(),
+      category: daiSuDocumentForm.category.trim(),
+      tags: daiSuDocumentForm.tags,
+      keywords: daiSuDocumentForm.keywords,
+      content: daiSuDocumentForm.content.trim(),
+      status: daiSuDocumentForm.status,
+    };
+
+    if (!payload.title || !payload.content) {
+      return;
+    }
+
+    const path = editingDaiSuDocumentId
+      ? `/api/daisu/documents/${editingDaiSuDocumentId}`
+      : "/api/daisu/documents";
+    const method = editingDaiSuDocumentId ? "PATCH" : "POST";
+
+    const data = await apiRequest(path, {
+      method,
+      body: JSON.stringify(payload),
+    });
+
+    setDaiSuDocuments(data.documents || []);
+    setDaiSuDocumentForm(emptyDaiSuDocumentForm);
+    setEditingDaiSuDocumentId("");
+  };
+
+  const handleDaiSuDocumentEdit = (document) => {
+    setEditingDaiSuDocumentId(document.id);
+    setDaiSuDocumentForm({
+      title: document.title || "",
+      category: document.category || "",
+      tags: (document.tags || []).join(", "),
+      keywords: (document.keywords || []).join(", "),
+      content: document.content || "",
+      status: document.status || "draft",
+    });
+  };
+
+  const handleDaiSuDocumentDelete = async (documentId) => {
+    const data = await apiRequest(`/api/daisu/documents/${documentId}`, {
+      method: "DELETE",
+    });
+    setDaiSuDocuments(data.documents || []);
+    if (editingDaiSuDocumentId === documentId) {
+      setEditingDaiSuDocumentId("");
+      setDaiSuDocumentForm(emptyDaiSuDocumentForm);
+    }
+  };
+
   const handleDeleteTag = async (tagId) => {
     try {
       const data = await apiRequest(`/api/tags/${tagId}`, {
@@ -1913,6 +2002,10 @@ function App() {
           onOpenBanDialog={openBanDialog}
           onUnban={confirmUnban}
           handleDeleteTag={handleDeleteTag}
+          handleDaiSuDocumentDelete={handleDaiSuDocumentDelete}
+          handleDaiSuDocumentEdit={handleDaiSuDocumentEdit}
+          handleDaiSuDocumentSubmit={handleDaiSuDocumentSubmit}
+          handleDaiSuSettingsChange={handleDaiSuSettingsChange}
           handleMessageDelete={handleMessageDelete}
           handleMessageEditCancel={handleMessageEditCancel}
           handleMessageEditStart={handleMessageEditStart}
@@ -1931,6 +2024,10 @@ function App() {
           emojiQuery={emojiQuery}
           emojiResults={emojiResults}
           messageEmojiTarget={messageEmojiTarget}
+          daiSuAnswerLogs={daiSuAnswerLogs}
+          daiSuAssistant={daiSuAssistant}
+          daiSuDocumentForm={daiSuDocumentForm}
+          daiSuDocuments={daiSuDocuments}
           selectedThreadTyping={selectedThreadTyping}
           selectedThread={selectedThread}
           selectedThreadId={selectedThreadId}
@@ -1951,6 +2048,8 @@ function App() {
           setEmojiPickerTarget={setEmojiPickerTarget}
           setEmojiQuery={setEmojiQuery}
           setMessageEmojiTarget={setMessageEmojiTarget}
+          setDaiSuDocumentForm={setDaiSuDocumentForm}
+          setEditingDaiSuDocumentId={setEditingDaiSuDocumentId}
           setSelectedThreadId={setSelectedThreadId}
           setSelectedStudentKey={setSelectedStudentKey}
           setTagName={setTagName}
@@ -1960,6 +2059,7 @@ function App() {
           tagCounts={tagCounts}
           tagName={tagName}
           tags={tags}
+          editingDaiSuDocumentId={editingDaiSuDocumentId}
           onRequestDeleteTag={confirmTagDelete}
           profileRequests={profileRequests}
           threads={filteredAdminThreads}
@@ -3009,6 +3109,218 @@ function NotificationAdminPanel({
   return null;
 }
 
+function DaiSuAdminPanel({
+  answerLogs,
+  assistant,
+  documentForm,
+  documents,
+  editingDocumentId,
+  handleDocumentDelete,
+  handleDocumentEdit,
+  handleDocumentSubmit,
+  handleSettingsChange,
+  setDocumentForm,
+  setEditingDocumentId,
+}) {
+  return (
+    <div className="daisu-admin-page">
+      <section className="daisu-card">
+        <header>
+          <div>
+            <p>DaiSu Assistant</p>
+            <h2>따이수 설정</h2>
+          </div>
+        </header>
+        <label>
+          이름
+          <input
+            value={assistant?.name || ""}
+            onChange={(event) => handleSettingsChange({ name: event.target.value })}
+          />
+        </label>
+        <label>
+          소개
+          <textarea
+            rows={2}
+            value={assistant?.description || ""}
+            onChange={(event) => handleSettingsChange({ description: event.target.value })}
+          />
+        </label>
+        <label>
+          말투
+          <textarea
+            rows={2}
+            value={assistant?.tone || ""}
+            onChange={(event) => handleSettingsChange({ tone: event.target.value })}
+          />
+        </label>
+        <label>
+          fallback 답변
+          <textarea
+            rows={3}
+            value={assistant?.fallbackMessage || ""}
+            onChange={(event) => handleSettingsChange({ fallbackMessage: event.target.value })}
+          />
+        </label>
+        <label className="toggle-line">
+          <input
+            checked={Boolean(assistant?.autoReplyEnabled)}
+            onChange={(event) => handleSettingsChange({ autoReplyEnabled: event.target.checked })}
+            type="checkbox"
+          />
+          자동응답 사용
+        </label>
+        <label>
+          자동응답 태그 필터
+          <input
+            value={(assistant?.autoReplyTags || []).join(", ")}
+            onChange={(event) => handleSettingsChange({ autoReplyTags: event.target.value })}
+            placeholder="예: 학사, 장학, tag-id"
+          />
+        </label>
+        <label>
+          최소 신뢰도
+          <input
+            max="50"
+            min="1"
+            type="number"
+            value={assistant?.confidenceThreshold || 6}
+            onChange={(event) => handleSettingsChange({ confidenceThreshold: Number(event.target.value) })}
+          />
+        </label>
+        <label>
+          답변 가드레일
+          <textarea
+            rows={4}
+            value={(assistant?.guardrails || []).join("\n")}
+            onChange={(event) => handleSettingsChange({ guardrails: event.target.value })}
+            placeholder="한 줄에 하나씩 입력"
+          />
+        </label>
+      </section>
+
+      <section className="daisu-card">
+        <header>
+          <div>
+            <p>Knowledge Base</p>
+            <h2>지식 문서</h2>
+          </div>
+        </header>
+        <form className="daisu-document-form" onSubmit={handleDocumentSubmit}>
+          <label>
+            제목
+            <input
+              value={documentForm.title}
+              onChange={(event) => setDocumentForm((current) => ({ ...current, title: event.target.value }))}
+            />
+          </label>
+          <label>
+            카테고리
+            <input
+              value={documentForm.category}
+              onChange={(event) => setDocumentForm((current) => ({ ...current, category: event.target.value }))}
+            />
+          </label>
+          <label>
+            태그
+            <input
+              value={documentForm.tags}
+              onChange={(event) => setDocumentForm((current) => ({ ...current, tags: event.target.value }))}
+              placeholder="쉼표로 구분"
+            />
+          </label>
+          <label>
+            키워드
+            <input
+              value={documentForm.keywords}
+              onChange={(event) => setDocumentForm((current) => ({ ...current, keywords: event.target.value }))}
+              placeholder="쉼표로 구분"
+            />
+          </label>
+          <label>
+            상태
+            <select
+              value={documentForm.status}
+              onChange={(event) => setDocumentForm((current) => ({ ...current, status: event.target.value }))}
+            >
+              <option value="draft">draft</option>
+              <option value="published">published</option>
+              <option value="archived">archived</option>
+            </select>
+          </label>
+          <label>
+            본문
+            <textarea
+              rows={8}
+              value={documentForm.content}
+              onChange={(event) => setDocumentForm((current) => ({ ...current, content: event.target.value }))}
+            />
+          </label>
+          <div className="daisu-form-actions">
+            <button className="black-button" type="submit">
+              {editingDocumentId ? "문서 수정" : "문서 추가"}
+            </button>
+            {editingDocumentId && (
+              <button
+                className="ghost-button"
+                onClick={() => {
+                  setEditingDocumentId("");
+                  setDocumentForm(emptyDaiSuDocumentForm);
+                }}
+                type="button"
+              >
+                취소
+              </button>
+            )}
+          </div>
+        </form>
+
+        <div className="daisu-document-list">
+          {documents.map((document) => (
+            <article className="daisu-document-item" key={document.id}>
+              <div>
+                <strong>{document.title}</strong>
+                <span>
+                  {document.category || "미분류"} · {document.status}
+                </span>
+                <p>{document.content}</p>
+              </div>
+              <div className="daisu-document-actions">
+                <button onClick={() => handleDocumentEdit(document)} type="button">
+                  수정
+                </button>
+                <button onClick={() => handleDocumentDelete(document.id)} type="button">
+                  삭제
+                </button>
+              </div>
+            </article>
+          ))}
+        </div>
+      </section>
+
+      <section className="daisu-card">
+        <header>
+          <div>
+            <p>Answer Log</p>
+            <h2>자동응답 기록</h2>
+          </div>
+        </header>
+        <div className="daisu-log-list">
+          {answerLogs.length === 0 && <p className="empty-copy">아직 따이수 답변 기록이 없습니다.</p>}
+          {answerLogs.map((log) => (
+            <article className="daisu-log-item" key={log.id}>
+              <strong>{log.mode}</strong>
+              <span>thread: {log.threadId}</span>
+              <span>score: {log.score}</span>
+              <small>{log.matchedDocumentIds.join(", ") || "근거 문서 없음"}</small>
+            </article>
+          ))}
+        </div>
+      </section>
+    </div>
+  );
+}
+
 function ReplyPreviewBar({ onClear, replyTarget }) {
   return (
     <div className="reply-preview-bar">
@@ -3261,6 +3573,10 @@ function AdminScreen({
   adminSection,
   adminTagFilter,
   adminStudentMessage,
+  daiSuAnswerLogs,
+  daiSuAssistant,
+  daiSuDocumentForm,
+  daiSuDocuments,
   emojiPickerTarget,
   emojiQuery,
   emojiResults,
@@ -3273,6 +3589,10 @@ function AdminScreen({
   handleAdminReplyStart,
   handleAdminStatusChange,
   handleCreateStudentChat,
+  handleDaiSuDocumentDelete,
+  handleDaiSuDocumentEdit,
+  handleDaiSuDocumentSubmit,
+  handleDaiSuSettingsChange,
   onOpenBanDialog,
   onUnban,
   handleDeleteTag,
@@ -3283,6 +3603,7 @@ function AdminScreen({
   handleProfileRequestReview,
   hasMoreMessages,
   editingMessageId,
+  editingDaiSuDocumentId,
   editingText,
   activeMessageMenuId,
   isAdminSending,
@@ -3307,6 +3628,8 @@ function AdminScreen({
   setAdminStudentMessage,
   setActiveMessageMenuId,
   setEditingText,
+  setDaiSuDocumentForm,
+  setEditingDaiSuDocumentId,
   setEmojiPickerTarget,
   setEmojiQuery,
   setMessageEmojiTarget,
@@ -3383,6 +3706,13 @@ function AdminScreen({
             변경 신청
             {pendingProfileRequests.length > 0 && <span>{pendingProfileRequests.length}</span>}
           </button>
+          <button
+            className={adminSection === "daisu" ? "active" : ""}
+            onClick={() => navigateTo(ADMIN_SECTION_PATHS.daisu)}
+            type="button"
+          >
+            따이수 관리
+          </button>
         </nav>
         <label className="admin-name">
           <span className={`realtime-pill ${realtimeStatus}`}>
@@ -3409,8 +3739,10 @@ function AdminScreen({
                 ? "문의 목록"
                 : adminSection === "students"
                   ? "학생 목록"
-                  : adminSection === "requests"
+                : adminSection === "requests"
                     ? "변경 신청"
+                    : adminSection === "daisu"
+                      ? "따이수 관리"
                     : adminSection === "tags"
                       ? "태그 관리"
                       : ""}
@@ -3422,6 +3754,8 @@ function AdminScreen({
                   ? `${students.length}명`
                   : adminSection === "requests"
                     ? `${pendingProfileRequests.length}건 대기`
+                    : adminSection === "daisu"
+                      ? `${daiSuDocuments.length}개 문서`
                     : adminSection === "tags"
                       ? `${tags.length}개 태그`
                       : ""}
@@ -3584,6 +3918,20 @@ function AdminScreen({
           <ProfileRequestAdminPanel
             handleProfileRequestReview={handleProfileRequestReview}
             profileRequests={profileRequests}
+          />
+        ) : adminSection === "daisu" ? (
+          <DaiSuAdminPanel
+            answerLogs={daiSuAnswerLogs}
+            assistant={daiSuAssistant}
+            documentForm={daiSuDocumentForm}
+            documents={daiSuDocuments}
+            editingDocumentId={editingDaiSuDocumentId}
+            handleDocumentDelete={handleDaiSuDocumentDelete}
+            handleDocumentEdit={handleDaiSuDocumentEdit}
+            handleDocumentSubmit={handleDaiSuDocumentSubmit}
+            handleSettingsChange={handleDaiSuSettingsChange}
+            setDocumentForm={setDaiSuDocumentForm}
+            setEditingDocumentId={setEditingDaiSuDocumentId}
           />
         ) : selectedThread ? (
           <>

@@ -1430,6 +1430,76 @@ textarea:focus {
   line-height: 1.55;
 }
 
+.daisu-admin-page {
+  display: grid;
+  gap: 18px;
+  padding: 24px 28px 32px;
+  overflow: auto;
+}
+
+.daisu-card {
+  display: grid;
+  gap: 12px;
+  padding: 20px;
+  border: 1px solid var(--line);
+  border-radius: 18px;
+  background: #ffffff;
+}
+
+.daisu-card header p {
+  margin: 0 0 4px;
+  color: var(--muted);
+  font-size: 12px;
+  font-weight: 800;
+  text-transform: uppercase;
+}
+
+.daisu-card header h2 {
+  margin: 0;
+}
+
+.daisu-card label {
+  display: grid;
+  gap: 6px;
+  font-size: 13px;
+  font-weight: 700;
+}
+
+.toggle-line {
+  grid-auto-flow: column;
+  justify-content: start;
+  align-items: center;
+  gap: 10px;
+}
+
+.daisu-document-form,
+.daisu-document-list,
+.daisu-log-list {
+  display: grid;
+  gap: 12px;
+}
+
+.daisu-form-actions,
+.daisu-document-actions {
+  display: flex;
+  gap: 8px;
+}
+
+.daisu-document-item,
+.daisu-log-item {
+  display: grid;
+  gap: 6px;
+  padding: 14px;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  background: var(--surface-soft);
+}
+
+.daisu-document-item p {
+  margin: 6px 0 0;
+  white-space: pre-wrap;
+}
+
 .admin-name input {
   height: 34px;
   border: 0;
