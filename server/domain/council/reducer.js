@@ -79,6 +79,45 @@ export const applyCouncilEvent = (state, event) => {
       };
     }
 
+    case "daisu.settingsUpdated": {
+      return {
+        ...state,
+        daisuAssistant: event.payload.assistant,
+      };
+    }
+
+    case "daisu.documentCreated": {
+      return {
+        ...state,
+        daisuKnowledgeDocuments: [event.payload.document, ...state.daisuKnowledgeDocuments],
+      };
+    }
+
+    case "daisu.documentUpdated": {
+      return {
+        ...state,
+        daisuKnowledgeDocuments: state.daisuKnowledgeDocuments.map((document) =>
+          document.id === event.payload.document.id ? event.payload.document : document,
+        ),
+      };
+    }
+
+    case "daisu.documentDeleted": {
+      return {
+        ...state,
+        daisuKnowledgeDocuments: state.daisuKnowledgeDocuments.filter(
+          (document) => document.id !== event.payload.documentId,
+        ),
+      };
+    }
+
+    case "daisu.answerLogged": {
+      return {
+        ...state,
+        daisuAnswerLogs: [event.payload.log, ...state.daisuAnswerLogs].slice(0, 500),
+      };
+    }
+
     case "profileChange.requested": {
       const request = event.payload.request;
       const existingIndex = state.profileRequests.findIndex((item) => item.id === request.id);

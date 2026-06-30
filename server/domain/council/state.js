@@ -1,6 +1,21 @@
 import { THREAD_STATUSES, normalizeThreadStatus } from "../thread/threadStatus.js";
 
 export const initialCouncilState = {
+  daisuAnswerLogs: [],
+  daisuAssistant: {
+    id: "daisu",
+    name: "따이수",
+    description: "학생회 문의를 돕는 AI 도우미",
+    tone: "친절하고 간결하게 답변합니다.",
+    guardrails: [],
+    fallbackMessage:
+      "현재 등록된 안내만으로는 정확한 답변이 어려워 학생회 담당자에게 연결하는 것이 안전합니다.",
+    autoReplyEnabled: false,
+    autoReplyTags: [],
+    confidenceThreshold: 6,
+    updatedAt: "",
+  },
+  daisuKnowledgeDocuments: [],
   notificationEmails: [],
   profileRequests: [],
   students: {},
@@ -70,6 +85,62 @@ export const normalizeReplyTarget = (value) => {
 };
 
 export const normalizeMessageReactionEmoji = (value) => String(value || "").trim().slice(0, 16);
+export const normalizeDaiSuText = (value, limit = 4000) => String(value || "").trim().slice(0, limit);
+export const normalizeDaiSuShortText = (value, limit = 120) => String(value || "").trim().slice(0, limit);
+export const normalizeDaiSuTags = (value, limit = 12) =>
+  (Array.isArray(value) ? value : String(value || "").split(","))
+    .map((item) => normalizeDaiSuShortText(item, 24))
+    .filter(Boolean)
+    .slice(0, limit);
+export const normalizeDaiSuGuardrails = (value, limit = 12) =>
+  (Array.isArray(value) ? value : String(value || "").split("\n"))
+    .map((item) => normalizeDaiSuText(item, 160))
+    .filter(Boolean)
+    .slice(0, limit);
+export const normalizeDaiSuDocumentStatus = (value) => {
+  const status = String(value || "").trim();
+  return ["draft", "published", "archived"].includes(status) ? status : "draft";
+};
+export const normalizeDaiSuAssistantSettings = (value = {}, current = initialCouncilState.daisuAssistant) => ({
+  ...current,
+  name: normalizeDaiSuShortText(value.name || current.name, 40) || current.name,
+  description: normalizeDaiSuText(value.description || current.description, 240) || current.description,
+  tone: normalizeDaiSuText(value.tone || current.tone, 240) || current.tone,
+  guardrails: normalizeDaiSuGuardrails(value.guardrails ?? current.guardrails),
+  fallbackMessage:
+    normalizeDaiSuText(value.fallbackMessage || current.fallbackMessage, 320) || current.fallbackMessage,
+  autoReplyEnabled: Boolean(value.autoReplyEnabled),
+  autoReplyTags: normalizeDaiSuTags(value.autoReplyTags ?? current.autoReplyTags),
+  confidenceThreshold: Math.max(1, Math.min(Number(value.confidenceThreshold) || current.confidenceThreshold || 6, 50)),
+  updatedAt: String(value.updatedAt || current.updatedAt || ""),
+});
+export const normalizeDaiSuKnowledgeDocument = (value = {}, current = null) => ({
+  ...(current || {}),
+  id: String(value.id || current?.id || "").trim(),
+  title: normalizeDaiSuShortText(value.title || current?.title || "", 80),
+  category: normalizeDaiSuShortText(value.category || current?.category || "", 40),
+  tags: normalizeDaiSuTags(value.tags ?? current?.tags),
+  keywords: normalizeDaiSuTags(value.keywords ?? current?.keywords, 24),
+  content: normalizeDaiSuText(value.content || current?.content || "", 8000),
+  status: normalizeDaiSuDocumentStatus(value.status || current?.status),
+  createdAt: String(value.createdAt || current?.createdAt || ""),
+  updatedAt: String(value.updatedAt || current?.updatedAt || ""),
+});
+export const normalizeDaiSuAnswerLog = (value = {}) => ({
+  id: String(value.id || "").trim(),
+  threadId: String(value.threadId || "").trim(),
+  studentMessageId: String(value.studentMessageId || "").trim(),
+  assistantMessageId: String(value.assistantMessageId || "").trim(),
+  matchedDocumentIds: (Array.isArray(value.matchedDocumentIds) ? value.matchedDocumentIds : [])
+    .map((item) => String(item || "").trim())
+    .filter(Boolean)
+    .slice(0, 10),
+  score: Number(value.score) || 0,
+  mode: String(value.mode || "auto").trim() || "auto",
+  createdAt: String(value.createdAt || "").trim(),
+});
+export const listPublishedDaiSuDocuments = (state) =>
+  (state.daisuKnowledgeDocuments || []).filter((document) => document.status === "published");
 
 export const isRecentDuplicateMessage = (message, { author, text }, nowMs) => {
   if (!message || message.author !== author || String(message.text || "").trim() !== text) {
