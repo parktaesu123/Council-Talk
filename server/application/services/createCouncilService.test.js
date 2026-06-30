@@ -217,3 +217,45 @@ test("daisu settings and documents can be managed by the service", async () => {
   const deletedState = await service.getDaiSuState();
   assert.equal(deletedState.documents.length, 0);
 });
+
+test("daisu can generate an automatic reply from published knowledge", async () => {
+  const service = await createTestService();
+
+  await service.signupStudent({
+    studentId: "1234",
+    name: "홍길동",
+    pin: "1111",
+    email: "student@example.com",
+  });
+
+  await service.updateDaiSuSettings({
+    autoReplyEnabled: true,
+    confidenceThreshold: 4,
+  });
+
+  await service.createDaiSuDocument({
+    title: "수강 정정 안내",
+    category: "학사",
+    tags: ["학사"],
+    keywords: ["수강", "정정"],
+    content: "수강 정정은 개강 첫 주 금요일 18시까지 가능합니다.\n학생회 공지 링크를 통해 신청합니다.",
+    status: "published",
+  });
+
+  const created = await service.createThread({
+    studentId: "1234",
+    name: "홍길동",
+    pin: "1111",
+    title: "수강 문의",
+    content: "수강 정정은 언제까지 가능한가요?",
+  });
+
+  const studentMessage = created.thread.messages[0];
+  const reply = await service.generateDaiSuReplyForThread(created.thread.id, studentMessage.id);
+
+  assert.equal(reply.skipped, "");
+  assert.equal(reply.assistantMessage.author, "admin");
+  assert.equal(reply.assistantMessage.authorLabel, "따이수");
+  assert.match(reply.assistantMessage.text, /수강 정정/);
+  assert.equal(reply.log.matchedDocumentIds.length, 1);
+});

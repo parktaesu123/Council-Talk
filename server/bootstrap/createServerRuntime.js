@@ -92,6 +92,16 @@ export const createServerRuntime = async ({ config }) => {
           threadId: event.payload.thread.id,
         });
         typingPresence.clearThread(event.payload.thread.id);
+
+        const latestMessage = event.payload.thread.messages.at(-1) || null;
+        if (latestMessage?.author === "student") {
+          const result = await service.generateDaiSuReplyForThread(
+            event.payload.thread.id,
+            latestMessage.id,
+          );
+          await eventBus.publish(result.domainEvents || []);
+          void durableDispatcher.enqueue(result.domainEvents || []);
+        }
       }
 
       if (event.type === "thread.messageUpdated" && event.payload?.thread && event.payload?.messageId) {
