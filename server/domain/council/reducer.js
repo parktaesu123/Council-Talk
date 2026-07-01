@@ -1,4 +1,4 @@
-import { normalizeThreadStatus, studentKey } from "./state.js";
+import { normalizeDaiSuLessonKey, normalizeThreadStatus, studentKey } from "./state.js";
 
 const replaceThread = (threads, nextThread) => {
   const index = threads.findIndex((thread) => thread.id === nextThread.id);
@@ -119,9 +119,15 @@ export const applyCouncilEvent = (state, event) => {
     }
 
     case "daisu.lessonLearned": {
+      const lessonKey = normalizeDaiSuLessonKey(event.payload.lesson.question);
       return {
         ...state,
-        daisuLessons: [event.payload.lesson, ...state.daisuLessons].slice(0, 500),
+        daisuLessons: [
+          event.payload.lesson,
+          ...state.daisuLessons.filter(
+            (lesson) => normalizeDaiSuLessonKey(lesson.question) !== lessonKey,
+          ),
+        ].slice(0, 500),
       };
     }
 

@@ -365,3 +365,67 @@ test("daisu can learn from admin answers in daisu threads", async () => {
   assert.match(autoReply.assistantMessage.text, /오전 10시부터 오후 6시/);
   assert.equal(autoReply.assistantMessage.assistant.mode, "lesson");
 });
+
+test("daisu skips weak lessons and keeps the latest useful answer per question", async () => {
+  const service = await createTestService();
+
+  await service.signupStudent({
+    studentId: "1234",
+    name: "홍길동",
+    pin: "1111",
+    email: "student@example.com",
+  });
+
+  const thread = await service.createThread({
+    studentId: "1234",
+    name: "홍길동",
+    pin: "1111",
+    title: "따이수와 대화",
+    content: "학생회비는 어디서 내?",
+  });
+
+  const weakReply = await service.addMessage(thread.thread.id, {
+    author: "admin",
+    authorLabel: "학생회",
+    clientMessageId: "client-admin-weak",
+    text: "확인해볼게요.",
+  });
+
+  const skipped = await service.learnDaiSuLessonFromThread(thread.thread.id, weakReply.message.id);
+  assert.equal(skipped.skipped, "lesson-not-useful");
+
+  const usefulReply = await service.addMessage(thread.thread.id, {
+    author: "admin",
+    authorLabel: "학생회",
+    clientMessageId: "client-admin-good",
+    text: "학생회비는 학생회실에서 카드나 계좌이체로 낼 수 있어요.",
+  });
+
+  const learned = await service.learnDaiSuLessonFromThread(thread.thread.id, usefulReply.message.id);
+  assert.equal(learned.skipped, "");
+
+  const updatedThread = await service.createThread({
+    studentId: "1234",
+    name: "홍길동",
+    pin: "1111",
+    title: "따이수와 대화",
+    content: "학생회비는 어디서 내?",
+  });
+
+  const newerReply = await service.addMessage(updatedThread.thread.id, {
+    author: "admin",
+    authorLabel: "학생회",
+    clientMessageId: "client-admin-newer",
+    text: "학생회비는 학생회실 방문 또는 등록 폼 링크로 납부할 수 있어요.",
+  });
+
+  const relearned = await service.learnDaiSuLessonFromThread(
+    updatedThread.thread.id,
+    newerReply.message.id,
+  );
+  assert.equal(relearned.skipped, "");
+
+  const state = await service.getState();
+  assert.equal(state.daisuLessons.length, 1);
+  assert.match(state.daisuLessons[0].answer, /등록 폼 링크/);
+});

@@ -148,6 +148,12 @@ export const normalizeDaiSuLesson = (value = {}) => ({
   source: normalizeDaiSuShortText(value.source || "conversation", 40),
   createdAt: String(value.createdAt || "").trim(),
 });
+export const normalizeDaiSuLessonKey = (value) =>
+  normalizeDaiSuText(value || "", 800)
+    .toLowerCase()
+    .replace(/[^a-z0-9가-힣]+/gi, " ")
+    .trim()
+    .slice(0, 120);
 export const listPublishedDaiSuDocuments = (state) =>
   (state.daisuKnowledgeDocuments || []).filter((document) => document.status === "published");
 

@@ -1,6 +1,31 @@
 import { notFound } from "../../errors.js";
 import { createDomainEvent } from "../../../domain/shared/domainEvent.js";
-import { normalizeDaiSuLesson } from "../../../domain/council/state.js";
+import {
+  normalizeDaiSuLesson,
+  normalizeDaiSuLessonKey,
+  normalizeDaiSuText,
+} from "../../../domain/council/state.js";
+
+const GENERIC_ANSWER_PATTERNS = [
+  "잘 모르겠",
+  "모르겠",
+  "확인해볼게",
+  "확인 후",
+  "잠시만",
+  "문의해줘",
+  "죄송",
+];
+
+const isUsefulLesson = ({ answer, question }) => {
+  const normalizedAnswer = normalizeDaiSuText(answer, 2000);
+  const normalizedQuestion = normalizeDaiSuText(question, 800);
+
+  if (normalizedQuestion.length < 6 || normalizedAnswer.length < 12) {
+    return false;
+  }
+
+  return !GENERIC_ANSWER_PATTERNS.some((pattern) => normalizedAnswer.includes(pattern));
+};
 
 export const createLearnDaiSuLessonFromThread = ({
   clock,
@@ -33,9 +58,17 @@ export const createLearnDaiSuLessonFromThread = ({
       return { result: { skipped: "question-not-found" } };
     }
 
+    if (!isUsefulLesson({ answer: adminMessage.text, question: question.text })) {
+      return { result: { skipped: "lesson-not-useful" } };
+    }
+
+    const lessonKey = normalizeDaiSuLessonKey(question.text);
+
     if (
       (state.daisuLessons || []).some(
-        (lesson) => lesson.threadId === threadId && lesson.question === question.text && lesson.answer === adminMessage.text,
+        (lesson) =>
+          normalizeDaiSuLessonKey(lesson.question) === lessonKey &&
+          lesson.answer === adminMessage.text,
       )
     ) {
       return { result: { skipped: "already-learned" } };
