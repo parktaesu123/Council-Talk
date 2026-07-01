@@ -122,8 +122,12 @@ export const createHttpApp = ({ runtime }) => {
     });
   }));
 
-  app.get("/api/daisu/answer-logs", createRouteHandler(async (_request, response) => {
-    response.json(await runtime.service.listDaiSuAnswerLogs());
+  app.get("/api/daisu/answer-logs", createRouteHandler(async (request, response) => {
+    response.json(
+      await runtime.service.listDaiSuAnswerLogs({
+        limit: request.query.limit,
+      }),
+    );
   }));
 
   app.post("/api/daisu/documents", createRouteHandler(async (request, response) => {
