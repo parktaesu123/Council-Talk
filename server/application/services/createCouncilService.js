@@ -53,6 +53,14 @@ import {
 export const createCouncilService = ({
   clock,
   daiSuModelClient = {
+    getStatus() {
+      return {
+        configured: false,
+        enabled: false,
+        model: "",
+        timeoutMs: 0,
+      };
+    },
     async generateReply() {
       return { text: "", skipped: "provider-not-configured" };
     },
@@ -98,6 +106,7 @@ export const createCouncilService = ({
     stateStore,
   });
   const getDaiSuState = createGetDaiSuState({
+    daiSuModelClient,
     stateStore,
   });
   const updateDaiSuSettings = createUpdateDaiSuSettings({

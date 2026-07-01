@@ -28,6 +28,14 @@ const createTestService = async () => {
       timeLabel: () => "09:00",
     },
     daiSuModelClient: {
+      getStatus() {
+        return {
+          configured: false,
+          enabled: false,
+          model: "",
+          timeoutMs: 1000,
+        };
+      },
       async generateReply() {
         return { text: "", skipped: "provider-disabled" };
       },

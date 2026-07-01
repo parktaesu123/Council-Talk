@@ -1553,6 +1553,37 @@ textarea:focus {
   font-weight: 700;
 }
 
+.daisu-status-grid {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: 12px;
+}
+
+.daisu-status-item {
+  display: grid;
+  gap: 6px;
+  padding: 14px 16px;
+  border: 1px solid var(--line);
+  border-radius: 16px;
+  background: #fafaf9;
+}
+
+.daisu-status-item span {
+  color: var(--muted);
+  font-size: 12px;
+}
+
+.daisu-status-item strong {
+  color: var(--text);
+  font-size: 16px;
+}
+
+@media (max-width: 960px) {
+  .daisu-status-grid {
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+  }
+}
+
 .toggle-line {
   grid-auto-flow: column;
   justify-content: start;

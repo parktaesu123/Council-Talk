@@ -40,6 +40,15 @@ const buildMessages = ({ assistant, conversation, contextText }) => {
 };
 
 export const createDaiSuModelClient = ({ config, logger }) => ({
+  getStatus() {
+    return {
+      enabled: Boolean(config.daisuAi.enabled),
+      configured: Boolean(config.daisuAi.apiKey),
+      model: config.daisuAi.model,
+      timeoutMs: config.daisuAi.timeoutMs,
+    };
+  },
+
   async generateReply({ assistant, contextText, conversation }) {
     if (!config.daisuAi.enabled || !config.daisuAi.apiKey) {
       return { text: "", skipped: "provider-disabled" };

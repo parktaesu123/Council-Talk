@@ -253,6 +253,8 @@ function App() {
   const [daiSuAssistant, setDaiSuAssistant] = useState(null);
   const [daiSuDocuments, setDaiSuDocuments] = useState([]);
   const [daiSuAnswerLogs, setDaiSuAnswerLogs] = useState([]);
+  const [daiSuProvider, setDaiSuProvider] = useState(null);
+  const [daiSuLessons, setDaiSuLessons] = useState([]);
   const [daiSuDocumentForm, setDaiSuDocumentForm] = useState(emptyDaiSuDocumentForm);
   const [editingDaiSuDocumentId, setEditingDaiSuDocumentId] = useState("");
   const [daiSuPrompt, setDaiSuPrompt] = useState(emptyDaiSuPrompt);
@@ -1001,6 +1003,8 @@ function App() {
       setProfileRequests(requestData.requests || []);
       setDaiSuAssistant(daiSuData.assistant || null);
       setDaiSuDocuments(daiSuData.documents || []);
+      setDaiSuLessons(daiSuData.lessons || []);
+      setDaiSuProvider(daiSuData.provider || null);
       setDaiSuAnswerLogs(daiSuLogs.answerLogs || []);
 
       if (deepLinkedThreadId && nextThreads.some((thread) => thread.id === deepLinkedThreadId)) {
@@ -3246,7 +3250,10 @@ function NotificationAdminPanel({
 }
 
 function DaiSuAdminPanel({
+  answerLogs,
   documentForm,
+  lessons,
+  provider,
   handleDocumentSubmit,
   setDocumentForm,
 }) {
@@ -3259,6 +3266,24 @@ function DaiSuAdminPanel({
             <h2>따이수 참고 내용</h2>
           </div>
         </header>
+        <div className="daisu-status-grid">
+          <div className="daisu-status-item">
+            <span>AI 연결</span>
+            <strong>{provider?.configured ? "연결됨" : "API 키 필요"}</strong>
+          </div>
+          <div className="daisu-status-item">
+            <span>모델</span>
+            <strong>{provider?.model || "-"}</strong>
+          </div>
+          <div className="daisu-status-item">
+            <span>학습 답변 수</span>
+            <strong>{lessons.length}</strong>
+          </div>
+          <div className="daisu-status-item">
+            <span>자동 응답 로그</span>
+            <strong>{answerLogs.length}</strong>
+          </div>
+        </div>
         <form className="daisu-document-form" onSubmit={handleDocumentSubmit}>
           <label>
             답변 참고 내용
@@ -3889,7 +3914,10 @@ function AdminScreen({
           />
         ) : adminSection === "daisu" ? (
           <DaiSuAdminPanel
+            answerLogs={daiSuAnswerLogs}
             documentForm={daiSuDocumentForm}
+            lessons={daiSuLessons}
+            provider={daiSuProvider}
             handleDocumentSubmit={handleDaiSuDocumentSubmit}
             setDocumentForm={setDaiSuDocumentForm}
           />
