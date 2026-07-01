@@ -437,3 +437,103 @@ test("daisu skips weak lessons and keeps the latest useful answer per question",
   assert.equal(state.daisuLessons.length, 1);
   assert.match(state.daisuLessons[0].answer, /등록 폼 링크/);
 });
+
+test("daisu answer logs can be limited and cleared", async () => {
+  const service = await createTestService();
+
+  await service.signupStudent({
+    studentId: "1234",
+    name: "홍길동",
+    pin: "1111",
+    email: "student@example.com",
+  });
+
+  await service.updateDaiSuSettings({
+    autoReplyEnabled: true,
+    confidenceThreshold: 1,
+  });
+
+  await service.createDaiSuDocument({
+    title: "학생회실 안내",
+    category: "학생회",
+    tags: [],
+    keywords: ["학생회실"],
+    content: "학생회실은 평일 운영합니다.",
+    status: "published",
+  });
+
+  for (let index = 0; index < 3; index += 1) {
+    const created = await service.createThread({
+      studentId: "1234",
+      name: "홍길동",
+      pin: "1111",
+      title: "따이수와 대화",
+      content: `학생회실 안내 ${index}`,
+    });
+    await service.generateDaiSuReplyForThread(created.thread.id, created.thread.messages[0].id);
+  }
+
+  const limited = await service.listDaiSuAnswerLogs({ limit: 2 });
+  assert.equal(limited.answerLogs.length, 2);
+
+  const cleared = await service.clearDaiSuAnswerLogs();
+  assert.equal(cleared.answerLogs.length, 0);
+});
+
+test("daisu lessons can be deleted from the service", async () => {
+  const service = await createTestService();
+
+  await service.signupStudent({
+    studentId: "1234",
+    name: "홍길동",
+    pin: "1111",
+    email: "student@example.com",
+  });
+
+  const thread = await service.createThread({
+    studentId: "1234",
+    name: "홍길동",
+    pin: "1111",
+    title: "따이수와 대화",
+    content: "학생회는 어디 있어?",
+  });
+
+  const adminReply = await service.addMessage(thread.thread.id, {
+    author: "admin",
+    authorLabel: "학생회",
+    clientMessageId: "client-admin-delete-lesson",
+    text: "학생회실은 학생회관 2층에 있어요.",
+  });
+
+  const learned = await service.learnDaiSuLessonFromThread(thread.thread.id, adminReply.message.id);
+  assert.equal(learned.skipped, "");
+
+  const deleted = await service.deleteDaiSuLesson(learned.lesson.id);
+  assert.equal(deleted.lessons.length, 0);
+});
+
+test("daisu preview builds a reply without creating a message", async () => {
+  const service = await createTestService();
+
+  await service.updateDaiSuSettings({
+    autoReplyEnabled: true,
+    confidenceThreshold: 1,
+  });
+
+  await service.createDaiSuDocument({
+    title: "복지 안내",
+    category: "복지",
+    tags: [],
+    keywords: ["복지"],
+    content: "복지 사업은 학생회 공지로 확인할 수 있습니다.",
+    status: "published",
+  });
+
+  const preview = await service.previewDaiSuReply({
+    text: "복지 사업은 어디서 확인해?",
+  });
+
+  assert.match(preview.replyText, /복지/);
+  const state = await service.getState();
+  assert.equal(state.threads.length, 0);
+});
