@@ -156,6 +156,14 @@ export const createHttpApp = ({ runtime }) => {
     });
   }));
 
+  app.delete("/api/daisu/lessons/:id", createRouteHandler(async (request, response) => {
+    const result = await runtime.service.deleteDaiSuLesson(request.params.id);
+    await runtime.handleCommittedEvents(result.domainEvents);
+    response.json({
+      lessons: result.lessons,
+    });
+  }));
+
   app.post("/api/notification-emails", createRouteHandler(async (request, response) => {
     response.status(201).json(await runtime.service.createNotificationEmail(request.body || {}));
   }));

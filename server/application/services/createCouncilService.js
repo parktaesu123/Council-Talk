@@ -18,6 +18,7 @@ import { createUpdateDaiSuSettings } from "./councilService/createUpdateDaiSuSet
 import { createCreateDaiSuDocument } from "./councilService/createCreateDaiSuDocument.js";
 import { createUpdateDaiSuDocument } from "./councilService/createUpdateDaiSuDocument.js";
 import { createDeleteDaiSuDocument } from "./councilService/createDeleteDaiSuDocument.js";
+import { createDeleteDaiSuLesson } from "./councilService/createDeleteDaiSuLesson.js";
 import { createListDaiSuAnswerLogs } from "./councilService/createListDaiSuAnswerLogs.js";
 import { createDaiSuResponder } from "./councilService/createDaiSuResponder.js";
 import { createGenerateDaiSuReplyForThread } from "./councilService/createGenerateDaiSuReplyForThread.js";
@@ -123,6 +124,9 @@ export const createCouncilService = ({
     stateStore,
   });
   const deleteDaiSuDocument = createDeleteDaiSuDocument({
+    stateStore,
+  });
+  const deleteDaiSuLesson = createDeleteDaiSuLesson({
     stateStore,
   });
   const listDaiSuAnswerLogs = createListDaiSuAnswerLogs({
@@ -289,6 +293,8 @@ export const createCouncilService = ({
     updateDaiSuDocument,
 
     deleteDaiSuDocument,
+
+    deleteDaiSuLesson,
 
     listDaiSuAnswerLogs,
 

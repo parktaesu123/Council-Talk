@@ -131,6 +131,13 @@ export const applyCouncilEvent = (state, event) => {
       };
     }
 
+    case "daisu.lessonDeleted": {
+      return {
+        ...state,
+        daisuLessons: state.daisuLessons.filter((lesson) => lesson.id !== event.payload.lessonId),
+      };
+    }
+
     case "profileChange.requested": {
       const request = event.payload.request;
       const existingIndex = state.profileRequests.findIndex((item) => item.id === request.id);
