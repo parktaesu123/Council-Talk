@@ -22,9 +22,13 @@ export const createDaiSuModelClient = ({ config, logger }) => ({
       return { text: "", skipped: "provider-disabled" };
     }
 
+    const controller = new AbortController();
+    const timeout = setTimeout(() => controller.abort(), config.daisuAi.timeoutMs);
+
     try {
       const response = await fetch(config.daisuAi.apiUrl, {
         method: "POST",
+        signal: controller.signal,
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${config.daisuAi.apiKey}`,
@@ -52,8 +56,15 @@ export const createDaiSuModelClient = ({ config, logger }) => ({
         skipped: text ? "" : "empty-provider-response",
       };
     } catch (error) {
+      if (error.name === "AbortError") {
+        logger.error("[daisu model failed]", `timeout after ${config.daisuAi.timeoutMs}ms`);
+        return { text: "", skipped: "provider-timeout" };
+      }
+
       logger.error("[daisu model failed]", error.message);
       return { text: "", skipped: "provider-exception" };
+    } finally {
+      clearTimeout(timeout);
     }
   },
 });

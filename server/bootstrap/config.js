@@ -30,6 +30,7 @@ export const createConfig = (env = process.env) => {
       apiUrl: env.DAISU_AI_API_URL || "https://api.openai.com/v1/chat/completions",
       model: env.DAISU_AI_MODEL || "gpt-4.1-mini",
       enabled: env.DAISU_AI_ENABLED !== "false",
+      timeoutMs: Math.max(1000, Math.min(Number(env.DAISU_AI_TIMEOUT_MS) || 10000, 30000)),
     },
   };
 };

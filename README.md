@@ -49,6 +49,7 @@ DAISU_AI_ENABLED=true
 DAISU_AI_API_KEY=your-api-key
 DAISU_AI_API_URL=https://api.openai.com/v1/chat/completions
 DAISU_AI_MODEL=gpt-4.1-mini
+DAISU_AI_TIMEOUT_MS=10000
 ```
 
 API 키가 없으면 따이수는 내부 fallback 규칙과 lesson memory 중심으로 동작합니다.
