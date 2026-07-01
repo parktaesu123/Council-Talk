@@ -76,6 +76,7 @@ export const createServerRuntime = async ({ config }) => {
     handlers: notificationHandlers,
     logger,
   });
+  const isDaiSuThread = (thread) => String(thread?.title || "").trim() === "따이수와 대화";
 
   eventBus.subscribe(async (events) => {
     for (const event of events) {
@@ -94,10 +95,22 @@ export const createServerRuntime = async ({ config }) => {
         typingPresence.clearThread(event.payload.thread.id);
 
         const latestMessage = event.payload.thread.messages.at(-1) || null;
-        if (latestMessage?.author === "student") {
+        if (latestMessage?.author === "student" && isDaiSuThread(event.payload.thread)) {
           const result = await service.generateDaiSuReplyForThread(
             event.payload.thread.id,
             latestMessage.id,
+          );
+          await eventBus.publish(result.domainEvents || []);
+          void durableDispatcher.enqueue(result.domainEvents || []);
+        }
+      }
+
+      if (event.type === "thread.created" && event.payload?.thread) {
+        const initialMessage = event.payload.thread.messages.at(-1) || null;
+        if (initialMessage?.author === "student" && isDaiSuThread(event.payload.thread)) {
+          const result = await service.generateDaiSuReplyForThread(
+            event.payload.thread.id,
+            initialMessage.id,
           );
           await eventBus.publish(result.domainEvents || []);
           void durableDispatcher.enqueue(result.domainEvents || []);
