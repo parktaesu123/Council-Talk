@@ -118,6 +118,13 @@ export const applyCouncilEvent = (state, event) => {
       };
     }
 
+    case "daisu.answerLogsCleared": {
+      return {
+        ...state,
+        daisuAnswerLogs: [],
+      };
+    }
+
     case "daisu.lessonLearned": {
       const lessonKey = normalizeDaiSuLessonKey(event.payload.lesson.question);
       return {

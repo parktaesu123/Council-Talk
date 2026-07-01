@@ -130,6 +130,14 @@ export const createHttpApp = ({ runtime }) => {
     );
   }));
 
+  app.delete("/api/daisu/answer-logs", createRouteHandler(async (_request, response) => {
+    const result = await runtime.service.clearDaiSuAnswerLogs();
+    await runtime.handleCommittedEvents(result.domainEvents);
+    response.json({
+      answerLogs: result.answerLogs,
+    });
+  }));
+
   app.post("/api/daisu/documents", createRouteHandler(async (request, response) => {
     const result = await runtime.service.createDaiSuDocument(request.body || {});
     await runtime.handleCommittedEvents(result.domainEvents);
