@@ -27,6 +27,11 @@ const createTestService = async () => {
       now: () => "2026-06-27T00:00:00.000Z",
       timeLabel: () => "09:00",
     },
+    daiSuModelClient: {
+      async generateReply() {
+        return { text: "", skipped: "provider-disabled" };
+      },
+    },
     hashPin: (value) => `hash:${value}`,
     idGenerator: () => `id-${++id}`,
     stateStore,
@@ -304,4 +309,59 @@ test("daisu introduces itself and admits when it does not know", async () => {
   );
 
   assert.match(unknownReply.assistantMessage.text, /모르겠어요/);
+});
+
+test("daisu can learn from admin answers in daisu threads", async () => {
+  const service = await createTestService();
+
+  await service.signupStudent({
+    studentId: "1234",
+    name: "홍길동",
+    pin: "1111",
+    email: "student@example.com",
+  });
+
+  await service.updateDaiSuSettings({
+    autoReplyEnabled: true,
+    confidenceThreshold: 3,
+  });
+
+  const thread = await service.createThread({
+    studentId: "1234",
+    name: "홍길동",
+    pin: "1111",
+    title: "따이수와 대화",
+    content: "학생회실 운영 시간이 언제야?",
+  });
+
+  const adminReply = await service.addMessage(thread.thread.id, {
+    author: "admin",
+    authorLabel: "학생회",
+    clientMessageId: "client-admin-01",
+    text: "학생회실은 평일 오전 10시부터 오후 6시까지 운영해요.",
+  });
+
+  const learned = await service.learnDaiSuLessonFromThread(
+    thread.thread.id,
+    adminReply.message.id,
+  );
+
+  assert.equal(learned.skipped, "");
+  assert.equal(learned.lesson.question, "학생회실 운영 시간이 언제야?");
+
+  const followupThread = await service.createThread({
+    studentId: "1234",
+    name: "홍길동",
+    pin: "1111",
+    title: "따이수와 대화",
+    content: "학생회실 운영 시간 알려줘",
+  });
+
+  const autoReply = await service.generateDaiSuReplyForThread(
+    followupThread.thread.id,
+    followupThread.thread.messages[0].id,
+  );
+
+  assert.match(autoReply.assistantMessage.text, /오전 10시부터 오후 6시/);
+  assert.equal(autoReply.assistantMessage.assistant.mode, "lesson");
 });
