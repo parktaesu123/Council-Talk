@@ -256,6 +256,9 @@ function App() {
   const [daiSuProvider, setDaiSuProvider] = useState(null);
   const [daiSuLessons, setDaiSuLessons] = useState([]);
   const [daiSuDocumentForm, setDaiSuDocumentForm] = useState(emptyDaiSuDocumentForm);
+  const [daiSuPreviewPrompt, setDaiSuPreviewPrompt] = useState("");
+  const [daiSuPreviewResult, setDaiSuPreviewResult] = useState(null);
+  const [isDaiSuPreviewLoading, setIsDaiSuPreviewLoading] = useState(false);
   const [editingDaiSuDocumentId, setEditingDaiSuDocumentId] = useState("");
   const [daiSuPrompt, setDaiSuPrompt] = useState(emptyDaiSuPrompt);
   const [pendingDaiSuPrompt, setPendingDaiSuPrompt] = useState("");
@@ -1931,6 +1934,25 @@ function App() {
     setDaiSuAnswerLogs(data.answerLogs || []);
   };
 
+  const handleDaiSuPreview = async () => {
+    if (!daiSuPreviewPrompt.trim()) {
+      return;
+    }
+
+    setIsDaiSuPreviewLoading(true);
+    try {
+      const data = await apiRequest("/api/daisu/preview", {
+        method: "POST",
+        body: JSON.stringify({
+          text: daiSuPreviewPrompt.trim(),
+        }),
+      });
+      setDaiSuPreviewResult(data);
+    } finally {
+      setIsDaiSuPreviewLoading(false);
+    }
+  };
+
   const handleDeleteTag = async (tagId) => {
     try {
       const data = await apiRequest(`/api/tags/${tagId}`, {
@@ -3268,9 +3290,14 @@ function DaiSuAdminPanel({
   documentForm,
   handleAnswerLogsClear,
   handleLessonDelete,
+  handlePreview,
+  isPreviewLoading,
   lessons,
+  previewPrompt,
+  previewResult,
   provider,
   handleDocumentSubmit,
+  setPreviewPrompt,
   setDocumentForm,
 }) {
   const modeCounts = answerLogs.reduce((counts, log) => {
@@ -3349,6 +3376,36 @@ function DaiSuAdminPanel({
             ))}
           </div>
         )}
+      </section>
+      <section className="daisu-card">
+        <header>
+          <div>
+            <p>DaiSu Preview</p>
+            <h2>답변 미리보기</h2>
+          </div>
+        </header>
+        <div className="daisu-document-form">
+          <label>
+            테스트 질문
+            <textarea
+              rows={6}
+              value={previewPrompt}
+              onChange={(event) => setPreviewPrompt(event.target.value)}
+              placeholder="학생이 물을 질문을 적으면 따이수의 예상 답변을 바로 확인할 수 있습니다."
+            />
+          </label>
+          <div className="daisu-form-actions">
+            <button className="black-button" onClick={handlePreview} type="button">
+              {isPreviewLoading ? "미리보는 중..." : "미리보기 실행"}
+            </button>
+          </div>
+          {previewResult && (
+            <article className="daisu-document-item">
+              <strong>{previewResult.mode || "unknown"} · score {previewResult.score ?? 0}</strong>
+              <p>{previewResult.replyText}</p>
+            </article>
+          )}
+        </div>
       </section>
     </div>
   );
@@ -3969,9 +4026,14 @@ function AdminScreen({
             documentForm={daiSuDocumentForm}
             handleAnswerLogsClear={handleDaiSuAnswerLogsClear}
             handleLessonDelete={handleDaiSuLessonDelete}
+            handlePreview={handleDaiSuPreview}
+            isPreviewLoading={isDaiSuPreviewLoading}
             lessons={daiSuLessons}
+            previewPrompt={daiSuPreviewPrompt}
+            previewResult={daiSuPreviewResult}
             provider={daiSuProvider}
             handleDocumentSubmit={handleDaiSuDocumentSubmit}
+            setPreviewPrompt={setDaiSuPreviewPrompt}
             setDocumentForm={setDaiSuDocumentForm}
           />
         ) : selectedThread ? (
