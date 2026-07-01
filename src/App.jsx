@@ -1917,6 +1917,13 @@ function App() {
     }
   };
 
+  const handleDaiSuLessonDelete = async (lessonId) => {
+    const data = await apiRequest(`/api/daisu/lessons/${lessonId}`, {
+      method: "DELETE",
+    });
+    setDaiSuLessons(data.lessons || []);
+  };
+
   const handleDeleteTag = async (tagId) => {
     try {
       const data = await apiRequest(`/api/tags/${tagId}`, {
@@ -3252,6 +3259,7 @@ function NotificationAdminPanel({
 function DaiSuAdminPanel({
   answerLogs,
   documentForm,
+  handleLessonDelete,
   lessons,
   provider,
   handleDocumentSubmit,
@@ -3315,6 +3323,19 @@ function DaiSuAdminPanel({
               <article className="daisu-log-item" key={log.id}>
                 <strong>{log.mode}</strong>
                 <span>{log.createdAt || "-"}</span>
+              </article>
+            ))}
+          </div>
+        )}
+        {lessons.length > 0 && (
+          <div className="daisu-document-list">
+            {lessons.slice(0, 5).map((lesson) => (
+              <article className="daisu-document-item" key={lesson.id}>
+                <strong>{lesson.question}</strong>
+                <p>{lesson.answer}</p>
+                <div className="daisu-document-actions">
+                  <button onClick={() => handleLessonDelete(lesson.id)} type="button">학습 삭제</button>
+                </div>
               </article>
             ))}
           </div>
@@ -3937,6 +3958,7 @@ function AdminScreen({
           <DaiSuAdminPanel
             answerLogs={daiSuAnswerLogs}
             documentForm={daiSuDocumentForm}
+            handleLessonDelete={handleDaiSuLessonDelete}
             lessons={daiSuLessons}
             provider={daiSuProvider}
             handleDocumentSubmit={handleDaiSuDocumentSubmit}
