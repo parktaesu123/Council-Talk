@@ -172,6 +172,15 @@ export const createHttpApp = ({ runtime }) => {
     });
   }));
 
+  app.post("/api/daisu/preview", createRouteHandler(async (request, response) => {
+    response.json(
+      await runtime.service.previewDaiSuReply({
+        text: request.body?.text,
+        threadId: request.body?.threadId,
+      }),
+    );
+  }));
+
   app.post("/api/notification-emails", createRouteHandler(async (request, response) => {
     response.status(201).json(await runtime.service.createNotificationEmail(request.body || {}));
   }));
