@@ -25,5 +25,11 @@ export const createConfig = (env = process.env) => {
       from: env.SMTP_FROM || env.SMTP_USER || "",
     },
     discordWebhookUrl: env.DISCORD_WEBHOOK_URL || "",
+    daisuAi: {
+      apiKey: env.DAISU_AI_API_KEY || "",
+      apiUrl: env.DAISU_AI_API_URL || "https://api.openai.com/v1/chat/completions",
+      model: env.DAISU_AI_MODEL || "gpt-4.1-mini",
+      enabled: env.DAISU_AI_ENABLED !== "false",
+    },
   };
 };
