@@ -1598,6 +1598,21 @@ textarea:focus {
   gap: 12px;
 }
 
+.daisu-log-summary {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.daisu-log-summary span {
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: #f4f4f5;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
 .daisu-form-actions,
 .daisu-document-actions {
   display: flex;

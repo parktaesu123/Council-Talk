@@ -994,7 +994,7 @@ function App() {
         apiRequest("/api/students"),
         apiRequest("/api/profile-requests"),
         apiRequest("/api/daisu"),
-        apiRequest("/api/daisu/answer-logs"),
+        apiRequest("/api/daisu/answer-logs?limit=50"),
       ]);
       const nextThreads = toThreadSummaries(threadData.threads);
       setThreads(nextThreads);
@@ -3257,6 +3257,11 @@ function DaiSuAdminPanel({
   handleDocumentSubmit,
   setDocumentForm,
 }) {
+  const modeCounts = answerLogs.reduce((counts, log) => {
+    counts[log.mode] = (counts[log.mode] || 0) + 1;
+    return counts;
+  }, {});
+
   return (
     <div className="daisu-admin-page">
       <section className="daisu-card">
@@ -3284,6 +3289,12 @@ function DaiSuAdminPanel({
             <strong>{answerLogs.length}</strong>
           </div>
         </div>
+        <div className="daisu-log-summary">
+          <span>생성형 {modeCounts.generative || 0}</span>
+          <span>학습답변 {modeCounts.lesson || 0}</span>
+          <span>문서기반 {modeCounts["retrieval-template"] || 0}</span>
+          <span>fallback {modeCounts["auto-fallback"] || modeCounts.fallback || 0}</span>
+        </div>
         <form className="daisu-document-form" onSubmit={handleDocumentSubmit}>
           <label>
             답변 참고 내용
@@ -3298,6 +3309,16 @@ function DaiSuAdminPanel({
             <button className="black-button" type="submit">저장</button>
           </div>
         </form>
+        {answerLogs.length > 0 && (
+          <div className="daisu-log-list">
+            {answerLogs.slice(0, 5).map((log) => (
+              <article className="daisu-log-item" key={log.id}>
+                <strong>{log.mode}</strong>
+                <span>{log.createdAt || "-"}</span>
+              </article>
+            ))}
+          </div>
+        )}
       </section>
     </div>
   );
