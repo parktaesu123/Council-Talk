@@ -1924,6 +1924,13 @@ function App() {
     setDaiSuLessons(data.lessons || []);
   };
 
+  const handleDaiSuAnswerLogsClear = async () => {
+    const data = await apiRequest("/api/daisu/answer-logs", {
+      method: "DELETE",
+    });
+    setDaiSuAnswerLogs(data.answerLogs || []);
+  };
+
   const handleDeleteTag = async (tagId) => {
     try {
       const data = await apiRequest(`/api/tags/${tagId}`, {
@@ -3259,6 +3266,7 @@ function NotificationAdminPanel({
 function DaiSuAdminPanel({
   answerLogs,
   documentForm,
+  handleAnswerLogsClear,
   handleLessonDelete,
   lessons,
   provider,
@@ -3302,6 +3310,7 @@ function DaiSuAdminPanel({
           <span>학습답변 {modeCounts.lesson || 0}</span>
           <span>문서기반 {modeCounts["retrieval-template"] || 0}</span>
           <span>fallback {modeCounts["auto-fallback"] || modeCounts.fallback || 0}</span>
+          <button onClick={handleAnswerLogsClear} type="button">로그 비우기</button>
         </div>
         <form className="daisu-document-form" onSubmit={handleDocumentSubmit}>
           <label>
@@ -3958,6 +3967,7 @@ function AdminScreen({
           <DaiSuAdminPanel
             answerLogs={daiSuAnswerLogs}
             documentForm={daiSuDocumentForm}
+            handleAnswerLogsClear={handleDaiSuAnswerLogsClear}
             handleLessonDelete={handleDaiSuLessonDelete}
             lessons={daiSuLessons}
             provider={daiSuProvider}
