@@ -16,6 +16,7 @@ export const initialCouncilState = {
     updatedAt: "",
   },
   daisuKnowledgeDocuments: [],
+  daisuLessons: [],
   notificationEmails: [],
   profileRequests: [],
   students: {},
@@ -137,6 +138,14 @@ export const normalizeDaiSuAnswerLog = (value = {}) => ({
     .slice(0, 10),
   score: Number(value.score) || 0,
   mode: String(value.mode || "auto").trim() || "auto",
+  createdAt: String(value.createdAt || "").trim(),
+});
+export const normalizeDaiSuLesson = (value = {}) => ({
+  id: String(value.id || "").trim(),
+  question: normalizeDaiSuText(value.question || "", 800),
+  answer: normalizeDaiSuText(value.answer || "", 2000),
+  threadId: String(value.threadId || "").trim(),
+  source: normalizeDaiSuShortText(value.source || "conversation", 40),
   createdAt: String(value.createdAt || "").trim(),
 });
 export const listPublishedDaiSuDocuments = (state) =>

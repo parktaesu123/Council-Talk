@@ -118,6 +118,13 @@ export const applyCouncilEvent = (state, event) => {
       };
     }
 
+    case "daisu.lessonLearned": {
+      return {
+        ...state,
+        daisuLessons: [event.payload.lesson, ...state.daisuLessons].slice(0, 500),
+      };
+    }
+
     case "profileChange.requested": {
       const request = event.payload.request;
       const existingIndex = state.profileRequests.findIndex((item) => item.id === request.id);

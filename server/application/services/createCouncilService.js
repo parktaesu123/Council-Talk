@@ -21,6 +21,7 @@ import { createDeleteDaiSuDocument } from "./councilService/createDeleteDaiSuDoc
 import { createListDaiSuAnswerLogs } from "./councilService/createListDaiSuAnswerLogs.js";
 import { createDaiSuResponder } from "./councilService/createDaiSuResponder.js";
 import { createGenerateDaiSuReplyForThread } from "./councilService/createGenerateDaiSuReplyForThread.js";
+import { createLearnDaiSuLessonFromThread } from "./councilService/createLearnDaiSuLessonFromThread.js";
 import { createDomainEvent } from "../../domain/shared/domainEvent.js";
 import {
   canManageMessage,
@@ -118,6 +119,11 @@ export const createCouncilService = ({
     clock,
     idGenerator,
     responder: daisuResponder,
+    stateStore,
+  });
+  const learnDaiSuLessonFromThread = createLearnDaiSuLessonFromThread({
+    clock,
+    idGenerator,
     stateStore,
   });
 
@@ -271,6 +277,8 @@ export const createCouncilService = ({
     listDaiSuAnswerLogs,
 
     generateDaiSuReplyForThread,
+
+    learnDaiSuLessonFromThread,
 
     async requestProfileChange(payload) {
       const state = await stateStore.read();
