@@ -1,7 +1,30 @@
+const normalizeReplyText = (value) => {
+  const text = String(value || "")
+    .replace(/^#{1,6}\s+/gm, "")
+    .replace(/\*\*(.*?)\*\*/g, "$1")
+    .replace(/```[\s\S]*?```/g, "")
+    .replace(/\n{3,}/g, "\n\n")
+    .trim();
+
+  if (!text) {
+    return "";
+  }
+
+  return text
+    .split("\n")
+    .map((line) => line.trim())
+    .filter(Boolean)
+    .slice(0, 8)
+    .join("\n")
+    .slice(0, 700)
+    .trim();
+};
+
 const buildMessages = ({ assistant, conversation, contextText }) => {
   const systemPrompt = [
     `너는 학생회 문의를 도와주는 대화형 AI ${assistant.name || "따이수"}다.`,
     "너의 역할은 학생 질문에 친절하고 자연스럽게 답변하는 것이다.",
+    assistant.tone ? `답변 톤: ${assistant.tone}` : "",
     "학생회가 입력한 참고 내용을 최우선으로 반영하되, 그 내용만 기계적으로 복붙하지 말고 자연스럽게 설명한다.",
     "모르는 내용은 추측하지 말고 모른다고 말한다.",
     "질문이 모호하면 필요한 정보를 짧게 다시 물어본다.",
@@ -50,7 +73,7 @@ export const createDaiSuModelClient = ({ config, logger }) => ({
       }
 
       const payload = await response.json();
-      const text = String(payload?.choices?.[0]?.message?.content || "").trim();
+      const text = normalizeReplyText(payload?.choices?.[0]?.message?.content);
       return {
         text,
         skipped: text ? "" : "empty-provider-response",
