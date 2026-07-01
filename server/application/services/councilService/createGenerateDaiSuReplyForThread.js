@@ -39,7 +39,13 @@ export const createGenerateDaiSuReplyForThread = ({
       return { result: { skipped: "already-answered" } };
     }
 
-    const { matchedDocuments, replyText, score, usedFallback } = responder.buildReply({
+    const {
+      matchedDocuments,
+      mode,
+      replyText,
+      score,
+      usedFallback,
+    } = await responder.buildReply({
       assistant,
       state,
       studentMessage,
@@ -62,7 +68,7 @@ export const createGenerateDaiSuReplyForThread = ({
       assistant: {
         confidence: score,
         matchedDocumentIds: matchedDocuments.map((document) => document.id),
-        mode: usedFallback ? "fallback" : "retrieval-template",
+        mode,
       },
     };
 
@@ -80,7 +86,7 @@ export const createGenerateDaiSuReplyForThread = ({
       assistantMessageId: assistantMessage.id,
       matchedDocumentIds: matchedDocuments.map((document) => document.id),
       score,
-      mode: usedFallback ? "auto-fallback" : "auto",
+      mode: usedFallback ? "auto-fallback" : mode,
       createdAt: now,
     };
 

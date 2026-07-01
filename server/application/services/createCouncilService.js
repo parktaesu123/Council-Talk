@@ -52,6 +52,11 @@ import {
 
 export const createCouncilService = ({
   clock,
+  daiSuModelClient = {
+    async generateReply() {
+      return { text: "", skipped: "provider-not-configured" };
+    },
+  },
   hashPin,
   idGenerator,
   stateStore,
@@ -114,7 +119,9 @@ export const createCouncilService = ({
   const listDaiSuAnswerLogs = createListDaiSuAnswerLogs({
     stateStore,
   });
-  const daisuResponder = createDaiSuResponder();
+  const daisuResponder = createDaiSuResponder({
+    modelClient: daiSuModelClient,
+  });
   const generateDaiSuReplyForThread = createGenerateDaiSuReplyForThread({
     clock,
     idGenerator,

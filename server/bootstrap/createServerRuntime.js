@@ -19,6 +19,7 @@ import { loadLegacyCouncilState } from "../infrastructure/persistence/loadLegacy
 import { createStateStore } from "../infrastructure/persistence/stateStore.js";
 import { createSseHub } from "../infrastructure/sse/createSseHub.js";
 import { createTypingPresenceService } from "../infrastructure/typing/createTypingPresenceService.js";
+import { createDaiSuModelClient } from "../infrastructure/ai/createDaiSuModelClient.js";
 import { createClock } from "../shared/clock.js";
 import { hashPin } from "../shared/crypto.js";
 
@@ -37,8 +38,13 @@ export const createServerRuntime = async ({ config }) => {
 
   const eventBus = createEventBus();
   const clock = createClock();
+  const daiSuModelClient = createDaiSuModelClient({
+    config,
+    logger,
+  });
   const service = createCouncilService({
     clock,
+    daiSuModelClient,
     hashPin,
     idGenerator: randomUUID,
     stateStore,
@@ -102,6 +108,15 @@ export const createServerRuntime = async ({ config }) => {
           );
           await eventBus.publish(result.domainEvents || []);
           void durableDispatcher.enqueue(result.domainEvents || []);
+        }
+
+        if (latestMessage?.author === "admin" && !latestMessage?.assistant && isDaiSuThread(event.payload.thread)) {
+          const learningResult = await service.learnDaiSuLessonFromThread(
+            event.payload.thread.id,
+            latestMessage.id,
+          );
+          await eventBus.publish(learningResult.domainEvents || []);
+          void durableDispatcher.enqueue(learningResult.domainEvents || []);
         }
       }
 

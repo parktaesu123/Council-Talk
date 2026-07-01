@@ -20,6 +20,10 @@ services:
       SMTP_PASS: "${SMTP_PASS:-}"
       SMTP_FROM: "${SMTP_FROM:-}"
       DISCORD_WEBHOOK_URL: "${DISCORD_WEBHOOK_URL:-}"
+      DAISU_AI_ENABLED: "${DAISU_AI_ENABLED:-true}"
+      DAISU_AI_API_KEY: "${DAISU_AI_API_KEY:-}"
+      DAISU_AI_API_URL: "${DAISU_AI_API_URL:-https://api.openai.com/v1/chat/completions}"
+      DAISU_AI_MODEL: "${DAISU_AI_MODEL:-gpt-4.1-mini}"
     ports:
       - "${APP_HOST:-0.0.0.0}:${APP_PORT:-8792}:3000"
     volumes:
