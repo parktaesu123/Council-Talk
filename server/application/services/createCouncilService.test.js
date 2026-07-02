@@ -534,6 +534,61 @@ test("daisu preview builds a reply without creating a message", async () => {
   });
 
   assert.match(preview.replyText, /복지/);
+  assert.equal(preview.matchedDocuments.length, 1);
+  assert.equal(preview.matchedDocuments[0].title, "복지 안내");
   const state = await service.getState();
   assert.equal(state.threads.length, 0);
+});
+
+test("daisu state and answer logs can be filtered for admin tooling", async () => {
+  const service = await createTestService();
+
+  await service.signupStudent({
+    studentId: "1234",
+    name: "홍길동",
+    pin: "1111",
+    email: "student@example.com",
+  });
+
+  await service.updateDaiSuSettings({
+    autoReplyEnabled: true,
+    confidenceThreshold: 1,
+  });
+
+  await service.createDaiSuDocument({
+    title: "학생회실 위치",
+    category: "학생회",
+    tags: [],
+    keywords: ["위치"],
+    content: "학생회실은 학생회관 2층에 있습니다.",
+    status: "published",
+  });
+
+  const created = await service.createThread({
+    studentId: "1234",
+    name: "홍길동",
+    pin: "1111",
+    title: "따이수와 대화",
+    content: "학생회실 위치가 어디야?",
+  });
+
+  await service.generateDaiSuReplyForThread(created.thread.id, created.thread.messages[0].id);
+
+  const allLogs = await service.listDaiSuAnswerLogs({ limit: 10 });
+  assert.equal(allLogs.answerLogs.length, 1);
+
+  const modeLogs = await service.listDaiSuAnswerLogs({
+    limit: 10,
+    mode: allLogs.answerLogs[0].mode,
+  });
+  assert.equal(modeLogs.answerLogs.length, 1);
+
+  const threadLogs = await service.listDaiSuAnswerLogs({
+    limit: 10,
+    threadId: created.thread.id,
+  });
+  assert.equal(threadLogs.answerLogs.length, 1);
+
+  const daisuState = await service.getDaiSuState({ lessonLimit: 1 });
+  assert.equal(daisuState.lessons.length, 0);
 });
