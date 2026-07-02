@@ -1645,6 +1645,21 @@ textarea:focus {
   color: #ffffff;
 }
 
+.daisu-preview-evidence {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.daisu-preview-evidence span {
+  padding: 6px 10px;
+  border-radius: 999px;
+  background: #f4f4f5;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 600;
+}
+
 .daisu-form-actions,
 .daisu-document-actions {
   display: flex;

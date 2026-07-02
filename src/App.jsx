@@ -3447,6 +3447,16 @@ function DaiSuAdminPanel({
             <article className="daisu-document-item">
               <strong>{previewResult.mode || "unknown"} · score {previewResult.score ?? 0}</strong>
               <p>{previewResult.replyText}</p>
+              {(previewResult.matchedDocuments || []).length > 0 && (
+                <div className="daisu-preview-evidence">
+                  {(previewResult.matchedDocuments || []).map((document) => (
+                    <span key={document.id}>
+                      {document.title}
+                      {document.category ? ` · ${document.category}` : ""}
+                    </span>
+                  ))}
+                </div>
+              )}
             </article>
           )}
         </div>
