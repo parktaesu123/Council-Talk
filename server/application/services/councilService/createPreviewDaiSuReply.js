@@ -48,7 +48,11 @@ export const createPreviewDaiSuReply = ({ responder, stateStore }) => async ({
   });
 
   return {
-    matchedDocuments: result.matchedDocuments || [],
+    matchedDocuments: (result.matchedDocuments || []).map((document) => ({
+      id: document.id,
+      title: document.title,
+      category: document.category,
+    })),
     mode: result.mode,
     replyText: result.replyText,
     score: result.score,
