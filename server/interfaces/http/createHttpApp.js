@@ -131,6 +131,7 @@ export const createHttpApp = ({ runtime }) => {
       await runtime.service.listDaiSuAnswerLogs({
         limit: request.query.limit,
         mode: request.query.mode,
+        threadId: request.query.threadId,
       }),
     );
   }));
