@@ -256,6 +256,7 @@ function App() {
   const [daiSuAnswerLogModeFilter, setDaiSuAnswerLogModeFilter] = useState("all");
   const [daiSuProvider, setDaiSuProvider] = useState(null);
   const [daiSuLessons, setDaiSuLessons] = useState([]);
+  const [daiSuLessonQuery, setDaiSuLessonQuery] = useState("");
   const [daiSuDocumentForm, setDaiSuDocumentForm] = useState(emptyDaiSuDocumentForm);
   const [daiSuPreviewPrompt, setDaiSuPreviewPrompt] = useState("");
   const [daiSuPreviewResult, setDaiSuPreviewResult] = useState(null);
@@ -999,7 +1000,7 @@ function App() {
         apiRequest("/api/tags"),
         apiRequest("/api/students"),
         apiRequest("/api/profile-requests"),
-        apiRequest("/api/daisu"),
+        apiRequest("/api/daisu?lessonLimit=100"),
         apiRequest(
           `/api/daisu/answer-logs?${new URLSearchParams({
             limit: "50",
@@ -3307,11 +3308,13 @@ function DaiSuAdminPanel({
   handleLessonDelete,
   handlePreview,
   isPreviewLoading,
+  lessonQuery,
   lessons,
   previewPrompt,
   previewResult,
   provider,
   handleDocumentSubmit,
+  setLessonQuery,
   setPreviewPrompt,
   setDocumentForm,
 }) {
@@ -3319,6 +3322,12 @@ function DaiSuAdminPanel({
     counts[log.mode] = (counts[log.mode] || 0) + 1;
     return counts;
   }, {});
+  const normalizedLessonQuery = lessonQuery.trim().toLowerCase();
+  const visibleLessons = normalizedLessonQuery
+    ? lessons.filter((lesson) =>
+        `${lesson.question} ${lesson.answer}`.toLowerCase().includes(normalizedLessonQuery),
+      )
+    : lessons;
 
   return (
     <div className="daisu-admin-page">
@@ -3390,9 +3399,17 @@ function DaiSuAdminPanel({
             ))}
           </div>
         )}
-        {lessons.length > 0 && (
+        <label>
+          학습 답변 검색
+          <input
+            onChange={(event) => setLessonQuery(event.target.value)}
+            placeholder="질문 또는 답변 내용으로 검색"
+            value={lessonQuery}
+          />
+        </label>
+        {visibleLessons.length > 0 && (
           <div className="daisu-document-list">
-            {lessons.slice(0, 5).map((lesson) => (
+            {visibleLessons.slice(0, 5).map((lesson) => (
               <article className="daisu-document-item" key={lesson.id}>
                 <strong>{lesson.question}</strong>
                 <p>{lesson.answer}</p>
@@ -4057,11 +4074,13 @@ function AdminScreen({
             handleLessonDelete={handleDaiSuLessonDelete}
             handlePreview={handleDaiSuPreview}
             isPreviewLoading={isDaiSuPreviewLoading}
+            lessonQuery={daiSuLessonQuery}
             lessons={daiSuLessons}
             previewPrompt={daiSuPreviewPrompt}
             previewResult={daiSuPreviewResult}
             provider={daiSuProvider}
             handleDocumentSubmit={handleDaiSuDocumentSubmit}
+            setLessonQuery={setDaiSuLessonQuery}
             setPreviewPrompt={setDaiSuPreviewPrompt}
             setDocumentForm={setDaiSuDocumentForm}
           />
