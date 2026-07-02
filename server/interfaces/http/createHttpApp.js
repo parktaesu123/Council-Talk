@@ -126,6 +126,7 @@ export const createHttpApp = ({ runtime }) => {
     response.json(
       await runtime.service.listDaiSuAnswerLogs({
         limit: request.query.limit,
+        mode: request.query.mode,
       }),
     );
   }));
