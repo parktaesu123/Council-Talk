@@ -111,7 +111,11 @@ export const createHttpApp = ({ runtime }) => {
   }));
 
   app.get("/api/daisu", createRouteHandler(async (_request, response) => {
-    response.json(await runtime.service.getDaiSuState());
+    response.json(
+      await runtime.service.getDaiSuState({
+        lessonLimit: _request.query.lessonLimit,
+      }),
+    );
   }));
 
   app.put("/api/daisu/settings", createRouteHandler(async (request, response) => {
