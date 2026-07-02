@@ -253,6 +253,7 @@ function App() {
   const [daiSuAssistant, setDaiSuAssistant] = useState(null);
   const [daiSuDocuments, setDaiSuDocuments] = useState([]);
   const [daiSuAnswerLogs, setDaiSuAnswerLogs] = useState([]);
+  const [daiSuAnswerLogModeFilter, setDaiSuAnswerLogModeFilter] = useState("all");
   const [daiSuProvider, setDaiSuProvider] = useState(null);
   const [daiSuLessons, setDaiSuLessons] = useState([]);
   const [daiSuDocumentForm, setDaiSuDocumentForm] = useState(emptyDaiSuDocumentForm);
@@ -989,7 +990,9 @@ function App() {
       ).toString()}`,
     );
 
-  const loadAdminData = async () => {
+  const loadAdminData = async (options = {}) => {
+    const mode = options.answerLogMode ?? daiSuAnswerLogModeFilter;
+
     try {
       const [threadData, tagData, studentData, requestData, daiSuData, daiSuLogs] = await Promise.all([
         apiRequest("/api/thread-summaries"),
@@ -997,7 +1000,12 @@ function App() {
         apiRequest("/api/students"),
         apiRequest("/api/profile-requests"),
         apiRequest("/api/daisu"),
-        apiRequest("/api/daisu/answer-logs?limit=50"),
+        apiRequest(
+          `/api/daisu/answer-logs?${new URLSearchParams({
+            limit: "50",
+            ...(mode !== "all" ? { mode } : {}),
+          }).toString()}`,
+        ),
       ]);
       const nextThreads = toThreadSummaries(threadData.threads);
       setThreads(nextThreads);
@@ -1017,6 +1025,11 @@ function App() {
     } catch {
       setThreads(loadThreads());
     }
+  };
+
+  const handleDaiSuAnswerLogModeChange = async (mode) => {
+    setDaiSuAnswerLogModeFilter(mode);
+    await loadAdminData({ answerLogMode: mode });
   };
 
   const refreshStudentSession = async (profile = studentProfile) => {
@@ -3287,8 +3300,10 @@ function NotificationAdminPanel({
 
 function DaiSuAdminPanel({
   answerLogs,
+  answerLogModeFilter,
   documentForm,
   handleAnswerLogsClear,
+  handleAnswerLogModeChange,
   handleLessonDelete,
   handlePreview,
   isPreviewLoading,
@@ -3338,6 +3353,18 @@ function DaiSuAdminPanel({
           <span>문서기반 {modeCounts["retrieval-template"] || 0}</span>
           <span>fallback {modeCounts["auto-fallback"] || modeCounts.fallback || 0}</span>
           <button onClick={handleAnswerLogsClear} type="button">로그 비우기</button>
+        </div>
+        <div className="daisu-log-filters">
+          {["all", "generative", "lesson", "retrieval-template", "auto-fallback"].map((mode) => (
+            <button
+              className={answerLogModeFilter === mode ? "active" : ""}
+              key={mode}
+              onClick={() => handleAnswerLogModeChange(mode)}
+              type="button"
+            >
+              {mode}
+            </button>
+          ))}
         </div>
         <form className="daisu-document-form" onSubmit={handleDocumentSubmit}>
           <label>
@@ -4023,8 +4050,10 @@ function AdminScreen({
         ) : adminSection === "daisu" ? (
           <DaiSuAdminPanel
             answerLogs={daiSuAnswerLogs}
+            answerLogModeFilter={daiSuAnswerLogModeFilter}
             documentForm={daiSuDocumentForm}
             handleAnswerLogsClear={handleDaiSuAnswerLogsClear}
+            handleAnswerLogModeChange={handleDaiSuAnswerLogModeChange}
             handleLessonDelete={handleDaiSuLessonDelete}
             handlePreview={handleDaiSuPreview}
             isPreviewLoading={isDaiSuPreviewLoading}

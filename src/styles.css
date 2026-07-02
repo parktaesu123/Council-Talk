@@ -1623,6 +1623,28 @@ textarea:focus {
   font-weight: 700;
 }
 
+.daisu-log-filters {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.daisu-log-filters button {
+  border: 1px solid var(--line);
+  border-radius: 999px;
+  padding: 8px 12px;
+  background: #ffffff;
+  color: var(--text);
+  font-size: 12px;
+  font-weight: 700;
+}
+
+.daisu-log-filters button.active {
+  background: #111111;
+  border-color: #111111;
+  color: #ffffff;
+}
+
 .daisu-form-actions,
 .daisu-document-actions {
   display: flex;
