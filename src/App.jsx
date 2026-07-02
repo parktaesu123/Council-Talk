@@ -1967,6 +1967,16 @@ function App() {
     }
   };
 
+  const handleOpenDaiSuLogThread = async (threadId) => {
+    if (!threadId) {
+      return;
+    }
+
+    setAdminSection("inquiries");
+    setSelectedThreadId(threadId);
+    navigateTo(getAdminThreadPath(threadId));
+  };
+
   const handleDeleteTag = async (tagId) => {
     try {
       const data = await apiRequest(`/api/tags/${tagId}`, {
@@ -3306,6 +3316,7 @@ function DaiSuAdminPanel({
   handleAnswerLogsClear,
   handleAnswerLogModeChange,
   handleLessonDelete,
+  handleOpenLogThread,
   handlePreview,
   isPreviewLoading,
   lessonQuery,
@@ -3395,6 +3406,7 @@ function DaiSuAdminPanel({
               <article className="daisu-log-item" key={log.id}>
                 <strong>{log.mode}</strong>
                 <span>{log.createdAt || "-"}</span>
+                <button onClick={() => handleOpenLogThread(log.threadId)} type="button">문의 열기</button>
               </article>
             ))}
           </div>
@@ -4082,6 +4094,7 @@ function AdminScreen({
             handleAnswerLogsClear={handleDaiSuAnswerLogsClear}
             handleAnswerLogModeChange={handleDaiSuAnswerLogModeChange}
             handleLessonDelete={handleDaiSuLessonDelete}
+            handleOpenLogThread={handleOpenDaiSuLogThread}
             handlePreview={handleDaiSuPreview}
             isPreviewLoading={isDaiSuPreviewLoading}
             lessonQuery={daiSuLessonQuery}
