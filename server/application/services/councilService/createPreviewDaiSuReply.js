@@ -60,5 +60,6 @@ export const createPreviewDaiSuReply = ({ responder, stateStore }) => async ({
     replyText: result.replyText,
     score: result.score,
     usedFallback: result.usedFallback,
+    providerSkippedReason: result.providerSkippedReason || "",
   };
 };

@@ -1660,6 +1660,12 @@ textarea:focus {
   font-weight: 600;
 }
 
+.daisu-preview-warning {
+  color: #b45309;
+  font-size: 13px;
+  font-weight: 700;
+}
+
 .daisu-form-actions,
 .daisu-document-actions {
   display: flex;

@@ -180,6 +180,7 @@ export const createDaiSuResponder = ({ modelClient }) => ({
       contextText,
       conversation: buildConversation(thread),
     });
+    const providerSkippedReason = modelResult.skipped || "";
 
     if (modelResult.text) {
       return {
@@ -190,6 +191,7 @@ export const createDaiSuResponder = ({ modelClient }) => ({
         replyText: modelResult.text,
         score: Math.max(top?.score || 0, 20),
         usedFallback: false,
+        providerSkippedReason,
       };
     }
 
@@ -200,6 +202,7 @@ export const createDaiSuResponder = ({ modelClient }) => ({
         replyText: buildUnknownReply(resolvedAssistant),
         score: top?.score || 0,
         usedFallback: true,
+        providerSkippedReason,
       };
     }
 
@@ -210,6 +213,7 @@ export const createDaiSuResponder = ({ modelClient }) => ({
         replyText: top.item.answer,
         score: top.score,
         usedFallback: false,
+        providerSkippedReason,
       };
     }
 
@@ -232,6 +236,7 @@ export const createDaiSuResponder = ({ modelClient }) => ({
       replyText: [opening, body, closing].filter(Boolean).join("\n\n"),
       score: top.score,
       usedFallback: false,
+      providerSkippedReason,
     };
   },
 });

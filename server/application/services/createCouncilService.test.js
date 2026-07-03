@@ -537,6 +537,7 @@ test("daisu preview builds a reply without creating a message", async () => {
   assert.match(preview.replyText, /복지/);
   assert.equal(preview.matchedDocuments.length, 1);
   assert.equal(preview.matchedDocuments[0].title, "복지 안내");
+  assert.equal(preview.providerSkippedReason, "provider-disabled");
   const state = await service.getState();
   assert.equal(state.threads.length, 0);
 });

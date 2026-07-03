@@ -3353,6 +3353,13 @@ function DaiSuAdminPanel({
         `${lesson.question} ${lesson.answer}`.toLowerCase().includes(normalizedLessonQuery),
       )
     : lessons;
+  const previewWarningByReason = {
+    "provider-disabled": "생성형 답변이 꺼져 있어서 참고 문서 기반 답변만 보여주고 있습니다.",
+    "provider-error": "생성형 모델 호출에 실패해서 참고 문서 기반 답변으로 대체되었습니다.",
+    "provider-timeout": "생성형 모델 응답 시간이 초과되어 참고 문서 기반 답변으로 대체되었습니다.",
+    "provider-exception": "생성형 모델 연결 중 오류가 발생해 참고 문서 기반 답변으로 대체되었습니다.",
+    "empty-provider-response": "생성형 모델이 빈 응답을 반환해서 참고 문서 기반 답변으로 대체되었습니다.",
+  };
 
   return (
     <div className="daisu-admin-page">
@@ -3476,6 +3483,12 @@ function DaiSuAdminPanel({
           {previewResult && (
             <article className="daisu-document-item">
               <strong>{previewResult.mode || "unknown"} · score {previewResult.score ?? 0}</strong>
+              {previewResult.providerSkippedReason && (
+                <p className="daisu-preview-warning">
+                  {previewWarningByReason[previewResult.providerSkippedReason] ||
+                    "생성형 모델을 사용하지 못해 참고 문서 기반 답변으로 대체되었습니다."}
+                </p>
+              )}
               <p>{previewResult.replyText}</p>
               {(previewResult.matchedDocuments || []).length > 0 && (
                 <div className="daisu-preview-evidence">
