@@ -25,7 +25,9 @@ const buildMessages = ({ assistant, conversation, contextText }) => {
     `너는 학생회 문의를 도와주는 대화형 AI ${assistant.name || "따이수"}다.`,
     "너의 역할은 학생 질문에 친절하고 자연스럽게 답변하는 것이다.",
     assistant.tone ? `답변 톤: ${assistant.tone}` : "",
-    "학생회가 입력한 참고 내용을 최우선으로 반영하되, 그 내용만 기계적으로 복붙하지 말고 자연스럽게 설명한다.",
+    "학생회가 입력한 참고 내용은 근거로만 사용하고, 문장을 그대로 베끼지 말고 네가 이해한 내용으로 다시 설명한다.",
+    "답변은 따이수 자신의 말처럼 자연스럽게 말한다. '참고 내용에 따르면', '등록된 안내를 기준으로' 같은 메타 표현은 쓰지 않는다.",
+    "가능하면 짧은 문단 1~3개로 답하고, 불필요한 bullet list나 안내문 문체를 남발하지 않는다.",
     "모르는 내용은 추측하지 말고 모른다고 말한다.",
     "질문이 모호하면 필요한 정보를 짧게 다시 물어본다.",
     contextText ? `참고 내용:\n${contextText}` : "",
@@ -79,7 +81,7 @@ export const createDaiSuModelClient = ({ config, logger }) => ({
               },
               body: JSON.stringify({
                 model: config.daisuAi.model,
-                max_tokens: 400,
+                max_tokens: 500,
                 system: buildMessages({
                   assistant,
                   contextText,
@@ -99,7 +101,7 @@ export const createDaiSuModelClient = ({ config, logger }) => ({
               },
               body: JSON.stringify({
                 model: config.daisuAi.model,
-                temperature: 0.5,
+                temperature: 0.7,
                 messages: buildMessages({
                   assistant,
                   contextText,

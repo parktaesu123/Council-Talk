@@ -74,11 +74,6 @@ const buildConversation = (thread) =>
 const buildContextText = ({ assistant, documents, lessons, ranked }) => {
   const sections = [];
 
-  const longGuide = documents[0]?.content || "";
-  if (longGuide) {
-    sections.push(`학생회 참고 내용:\n${normalizeDaiSuText(longGuide, 6000)}`);
-  }
-
   const topLessons = ranked
     .filter((entry) => entry.item.kind === "lesson")
     .slice(0, 3)
@@ -89,10 +84,26 @@ const buildContextText = ({ assistant, documents, lessons, ranked }) => {
     sections.push(`이전 대화에서 학습한 예시:\n${topLessons}`);
   }
 
+  const generalGuide = documents
+    .slice(0, 2)
+    .map((document) => extractRelevantLines(document.content, []))
+    .flat()
+    .slice(0, 5)
+    .join("\n");
+
+  if (generalGuide) {
+    sections.push(`학생회 운영 원칙과 안내 요약:\n${normalizeDaiSuText(generalGuide, 1200)}`);
+  }
+
   const topDocs = ranked
     .filter((entry) => entry.item.kind === "document")
     .slice(0, 3)
-    .map((entry, index) => `문서 ${index + 1}: ${entry.item.title}\n${extractRelevantLines(entry.item.content, entry.matchedTokens).join("\n")}`)
+    .map((entry, index) => {
+      const summary = extractRelevantLines(entry.item.content, entry.matchedTokens)
+        .slice(0, 3)
+        .join("\n");
+      return `문서 ${index + 1}: ${entry.item.title}\n핵심 요점:\n${summary}`;
+    })
     .join("\n\n");
 
   if (topDocs) {
@@ -202,18 +213,23 @@ export const createDaiSuResponder = ({ modelClient }) => ({
       };
     }
 
-    const relatedLines = extractRelevantLines(top.item.content, top.matchedTokens);
-    const opening = `안녕하세요, ${resolvedAssistant.name}입니다. 참고 내용과 이전 대화를 바탕으로 답변드릴게요.`;
-    const body = relatedLines.map((line) => `- ${normalizeDaiSuShortText(line, 160)}`).join("\n");
+    const relatedLines = extractRelevantLines(top.item.content, top.matchedTokens)
+      .map((line) => normalizeDaiSuShortText(line, 160));
+    const firstPoint = relatedLines[0] || "";
+    const secondPoint = relatedLines[1] || "";
+    const opening = `안녕하세요, ${resolvedAssistant.name}입니다.`;
+    const body = secondPoint
+      ? `${firstPoint} ${secondPoint}`.trim()
+      : firstPoint;
     const closing =
       thread.tagName || top.item.category
-        ? `추가로 ${thread.tagName || top.item.category} 상황이 다를 수 있으니 필요하면 학생회 담당자가 이어서 확인해드릴게요.`
-        : "세부 상황이 다를 수 있으니 필요하면 학생회 담당자가 이어서 확인해드릴게요.";
+        ? `${thread.tagName || top.item.category}처럼 세부 상황에 따라 달라질 수 있어서, 필요하면 학생회 담당자가 이어서 더 정확히 확인해드릴게요.`
+        : "상황에 따라 세부 안내가 달라질 수 있어서, 필요하면 학생회 담당자가 이어서 더 정확히 확인해드릴게요.";
 
     return {
       matchedDocuments: ranked.map((entry) => entry.item).filter((item) => item.kind === "document"),
       mode: "retrieval-template",
-      replyText: [opening, "", body, "", closing].join("\n"),
+      replyText: [opening, body, closing].filter(Boolean).join("\n\n"),
       score: top.score,
       usedFallback: false,
     };
