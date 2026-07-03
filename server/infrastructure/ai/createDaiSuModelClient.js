@@ -39,12 +39,19 @@ const buildMessages = ({ assistant, conversation, contextText }) => {
   ];
 };
 
+const buildAnthropicMessages = ({ conversation }) =>
+  conversation.map((message) => ({
+    role: message.role,
+    content: [{ type: "text", text: String(message.content || "") }],
+  }));
+
 export const createDaiSuModelClient = ({ config, logger }) => ({
   getStatus() {
     return {
       enabled: Boolean(config.daisuAi.enabled),
       configured: Boolean(config.daisuAi.apiKey),
       model: config.daisuAi.model,
+      provider: config.daisuAi.provider,
       timeoutMs: config.daisuAi.timeoutMs,
     };
   },
@@ -58,23 +65,49 @@ export const createDaiSuModelClient = ({ config, logger }) => ({
     const timeout = setTimeout(() => controller.abort(), config.daisuAi.timeoutMs);
 
     try {
-      const response = await fetch(config.daisuAi.apiUrl, {
-        method: "POST",
-        signal: controller.signal,
-        headers: {
-          "Content-Type": "application/json",
-          Authorization: `Bearer ${config.daisuAi.apiKey}`,
-        },
-        body: JSON.stringify({
-          model: config.daisuAi.model,
-          temperature: 0.5,
-          messages: buildMessages({
-            assistant,
-            contextText,
-            conversation,
-          }),
-        }),
-      });
+      const isAnthropic = config.daisuAi.provider === "anthropic";
+      const response = await fetch(
+        config.daisuAi.apiUrl,
+        isAnthropic
+          ? {
+              method: "POST",
+              signal: controller.signal,
+              headers: {
+                "Content-Type": "application/json",
+                "anthropic-version": "2023-06-01",
+                "x-api-key": config.daisuAi.apiKey,
+              },
+              body: JSON.stringify({
+                model: config.daisuAi.model,
+                max_tokens: 400,
+                system: buildMessages({
+                  assistant,
+                  contextText,
+                  conversation: [],
+                })[0].content,
+                messages: buildAnthropicMessages({
+                  conversation,
+                }),
+              }),
+            }
+          : {
+              method: "POST",
+              signal: controller.signal,
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${config.daisuAi.apiKey}`,
+              },
+              body: JSON.stringify({
+                model: config.daisuAi.model,
+                temperature: 0.5,
+                messages: buildMessages({
+                  assistant,
+                  contextText,
+                  conversation,
+                }),
+              }),
+            },
+      );
 
       if (!response.ok) {
         logger.error("[daisu model failed]", response.status, await response.text());
@@ -82,7 +115,14 @@ export const createDaiSuModelClient = ({ config, logger }) => ({
       }
 
       const payload = await response.json();
-      const text = normalizeReplyText(payload?.choices?.[0]?.message?.content);
+      const text = normalizeReplyText(
+        config.daisuAi.provider === "anthropic"
+          ? payload?.content
+              ?.filter((item) => item?.type === "text")
+              .map((item) => item?.text || "")
+              .join("\n")
+          : payload?.choices?.[0]?.message?.content,
+      );
       return {
         text,
         skipped: text ? "" : "empty-provider-response",
