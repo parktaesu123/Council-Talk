@@ -26,6 +26,9 @@ export const createConfig = (env = process.env) => {
     },
     discordWebhookUrl: env.DISCORD_WEBHOOK_URL || "",
     daisuAi: {
+      provider: ["openai", "anthropic"].includes(String(env.DAISU_AI_PROVIDER || "").trim())
+        ? String(env.DAISU_AI_PROVIDER || "").trim()
+        : "openai",
       apiKey: env.DAISU_AI_API_KEY || "",
       apiUrl: env.DAISU_AI_API_URL || "https://api.openai.com/v1/chat/completions",
       model: env.DAISU_AI_MODEL || "gpt-4.1-mini",

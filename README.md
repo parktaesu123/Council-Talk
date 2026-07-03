@@ -42,14 +42,23 @@ DISCORD_WEBHOOK_URL=https://discord.com/api/webhooks/...
 
 ## DaiSu conversational AI
 
-따이수를 생성형 대화형 AI처럼 동작시키려면 OpenAI 호환 Chat Completions API를 연결할 수 있습니다.
+따이수를 생성형 대화형 AI처럼 동작시키려면 OpenAI 또는 Anthropic Claude API를 연결할 수 있습니다.
 
 ```env
 DAISU_AI_ENABLED=true
+DAISU_AI_PROVIDER=openai
 DAISU_AI_API_KEY=your-api-key
 DAISU_AI_API_URL=https://api.openai.com/v1/chat/completions
 DAISU_AI_MODEL=gpt-4.1-mini
 DAISU_AI_TIMEOUT_MS=10000
+```
+
+Claude를 쓸 때는 예를 들어 아래처럼 바꿉니다.
+
+```env
+DAISU_AI_PROVIDER=anthropic
+DAISU_AI_API_URL=https://api.anthropic.com/v1/messages
+DAISU_AI_MODEL=claude-sonnet-4-20250514
 ```
 
 API 키가 없으면 따이수는 내부 fallback 규칙과 lesson memory 중심으로 동작합니다.
