@@ -1,4 +1,5 @@
 import {
+  initialCouncilState,
   listPublishedDaiSuDocuments,
   normalizeDaiSuShortText,
   normalizeDaiSuText,
@@ -107,6 +108,7 @@ const buildContextText = ({ assistant, documents, lessons, ranked }) => {
 
 export const createDaiSuResponder = ({ modelClient }) => ({
   async buildReply({ assistant, state, studentMessage, thread }) {
+    const resolvedAssistant = assistant || initialCouncilState.daisuAssistant;
     const rawQuestion = normalizeDaiSuText(studentMessage.text, 2000).toLowerCase();
     const tokens = unique(tokenize(studentMessage.text));
     const documents = listPublishedDaiSuDocuments(state).map((document) => ({
@@ -134,7 +136,7 @@ export const createDaiSuResponder = ({ modelClient }) => ({
       return {
         matchedDocuments: [],
         mode: "identity",
-        replyText: buildIdentityReply(assistant),
+        replyText: buildIdentityReply(resolvedAssistant),
         score: 100,
         usedFallback: false,
       };
@@ -144,7 +146,7 @@ export const createDaiSuResponder = ({ modelClient }) => ({
       return {
         matchedDocuments: [],
         mode: "fallback",
-        replyText: buildUnknownReply(assistant),
+        replyText: buildUnknownReply(resolvedAssistant),
         score: 0,
         usedFallback: true,
       };
@@ -157,13 +159,13 @@ export const createDaiSuResponder = ({ modelClient }) => ({
 
     const top = ranked[0];
     const contextText = buildContextText({
-      assistant,
+      assistant: resolvedAssistant,
       documents,
       lessons,
       ranked,
     });
     const modelResult = await modelClient.generateReply({
-      assistant,
+      assistant: resolvedAssistant,
       contextText,
       conversation: buildConversation(thread),
     });
@@ -180,11 +182,11 @@ export const createDaiSuResponder = ({ modelClient }) => ({
       };
     }
 
-    if (!top || top.score < assistant.confidenceThreshold) {
+    if (!top || top.score < resolvedAssistant.confidenceThreshold) {
       return {
         matchedDocuments: ranked.map((entry) => entry.item).filter((item) => item.kind === "document"),
         mode: "fallback",
-        replyText: buildUnknownReply(assistant),
+        replyText: buildUnknownReply(resolvedAssistant),
         score: top?.score || 0,
         usedFallback: true,
       };
@@ -201,7 +203,7 @@ export const createDaiSuResponder = ({ modelClient }) => ({
     }
 
     const relatedLines = extractRelevantLines(top.item.content, top.matchedTokens);
-    const opening = `안녕하세요, ${assistant.name}입니다. 참고 내용과 이전 대화를 바탕으로 답변드릴게요.`;
+    const opening = `안녕하세요, ${resolvedAssistant.name}입니다. 참고 내용과 이전 대화를 바탕으로 답변드릴게요.`;
     const body = relatedLines.map((line) => `- ${normalizeDaiSuShortText(line, 160)}`).join("\n");
     const closing =
       thread.tagName || top.item.category

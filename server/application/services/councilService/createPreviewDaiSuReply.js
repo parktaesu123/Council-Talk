@@ -1,5 +1,8 @@
 import { badRequest, notFound } from "../../errors.js";
-import { normalizeDaiSuText } from "../../../domain/council/state.js";
+import {
+  initialCouncilState,
+  normalizeDaiSuText,
+} from "../../../domain/council/state.js";
 
 export const createPreviewDaiSuReply = ({ responder, stateStore }) => async ({
   text,
@@ -12,7 +15,7 @@ export const createPreviewDaiSuReply = ({ responder, stateStore }) => async ({
   }
 
   const state = await stateStore.read();
-  const assistant = state.daisuAssistant;
+  const assistant = state.daisuAssistant || initialCouncilState.daisuAssistant;
   const thread = threadId
     ? state.threads.find((item) => item.id === threadId) || null
     : null;

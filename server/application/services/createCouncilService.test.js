@@ -540,6 +540,18 @@ test("daisu preview builds a reply without creating a message", async () => {
   assert.equal(state.threads.length, 0);
 });
 
+test("daisu preview falls back to default assistant when legacy state lacks assistant settings", async () => {
+  const service = await createTestService();
+  const state = await service.getState();
+  state.daisuAssistant = undefined;
+
+  const preview = await service.previewDaiSuReply({
+    text: "너 누구야?",
+  });
+
+  assert.match(preview.replyText, /따이수/);
+});
+
 test("daisu state and answer logs can be filtered for admin tooling", async () => {
   const service = await createTestService();
 
