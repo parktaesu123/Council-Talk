@@ -6,6 +6,11 @@ const defaultSnapshot = (initialState) => ({
   state: initialState,
 });
 
+const mergeStateDefaults = (initialState, state) => ({
+  ...structuredClone(initialState),
+  ...(state && typeof state === "object" ? structuredClone(state) : {}),
+});
+
 export const createStateStore = ({
   eventStore,
   evolve,
@@ -24,7 +29,7 @@ export const createStateStore = ({
       snapshotFilePath,
       defaultSnapshot(structuredClone(initialState)),
     );
-    const baseState = structuredClone(snapshot.state ?? initialState);
+    const baseState = mergeStateDefaults(initialState, snapshot.state ?? initialState);
     const lastSequence = Number(snapshot.lastSequence || 0);
     const events = await eventStore.readAll();
     const pendingEvents = events.filter((event) => event.sequence > lastSequence);

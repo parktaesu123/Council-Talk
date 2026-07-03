@@ -6,6 +6,7 @@ import { mkdtemp } from "node:fs/promises";
 
 import { createCouncilService } from "./createCouncilService.js";
 import { createAppendOnlyEventStore } from "../../infrastructure/persistence/appendOnlyEventStore.js";
+import { writeJsonFileAtomic } from "../../infrastructure/persistence/atomicFile.js";
 import { createStateStore } from "../../infrastructure/persistence/stateStore.js";
 import { applyCouncilEvent } from "../../domain/council/reducer.js";
 import { initialCouncilState } from "../../domain/council/state.js";
@@ -550,6 +551,37 @@ test("daisu preview falls back to default assistant when legacy state lacks assi
   });
 
   assert.match(preview.replyText, /따이수/);
+});
+
+test("state store merges missing daiSu fields from defaults on legacy snapshots", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "council-talk-legacy-snapshot-"));
+  const snapshotFilePath = path.join(tempDir, "snapshot.json");
+
+  await writeJsonFileAtomic(snapshotFilePath, {
+    lastSequence: 0,
+    updatedAt: "2026-07-03T00:00:00.000Z",
+    state: {
+      threads: [],
+      students: {},
+      tags: [],
+      profileRequests: [],
+      notificationEmails: [],
+    },
+  });
+
+  const stateStore = createStateStore({
+    eventStore: createAppendOnlyEventStore({
+      filePath: path.join(tempDir, "events.jsonl"),
+    }),
+    evolve: applyCouncilEvent,
+    initialState: initialCouncilState,
+    snapshotFilePath,
+  });
+
+  const state = await stateStore.read();
+  assert.equal(state.daisuAssistant.name, "따이수");
+  assert.deepEqual(state.daisuLessons, []);
+  assert.deepEqual(state.daisuAnswerLogs, []);
 });
 
 test("daisu state and answer logs can be filtered for admin tooling", async () => {

@@ -13,6 +13,7 @@ export const loadLegacyCouncilState = async (dataDir) => {
   ]);
 
   return {
+    ...initialCouncilState,
     notificationEmails: Array.isArray(notificationEmails) ? notificationEmails : [],
     profileRequests: Array.isArray(profileRequests) ? profileRequests : [],
     students: students && typeof students === "object" ? students : {},
