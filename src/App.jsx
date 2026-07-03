@@ -3359,6 +3359,10 @@ function DaiSuAdminPanel({
             <strong>{provider?.model || "-"}</strong>
           </div>
           <div className="daisu-status-item">
+            <span>Provider</span>
+            <strong>{provider?.provider || "openai"}</strong>
+          </div>
+          <div className="daisu-status-item">
             <span>학습 답변 수</span>
             <strong>{lessons.length}</strong>
           </div>
