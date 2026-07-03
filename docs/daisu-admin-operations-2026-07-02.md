@@ -38,10 +38,20 @@
 
 ```env
 DAISU_AI_ENABLED=true
+DAISU_AI_PROVIDER=openai
 DAISU_AI_API_KEY=sk-...
 DAISU_AI_API_URL=https://api.openai.com/v1/chat/completions
 DAISU_AI_MODEL=gpt-4.1-mini
 DAISU_AI_TIMEOUT_MS=10000
+```
+
+Claude를 쓸 때는 아래처럼 바꾼다.
+
+```env
+DAISU_AI_PROVIDER=anthropic
+DAISU_AI_API_URL=https://api.anthropic.com/v1/messages
+DAISU_AI_MODEL=claude-sonnet-4-20250514
+DAISU_AI_API_KEY=sk-ant-...
 ```
 
 ## 해석 기준
