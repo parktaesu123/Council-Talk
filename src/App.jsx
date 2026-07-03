@@ -2197,15 +2197,27 @@ function App() {
           emojiResults={emojiResults}
           messageEmojiTarget={messageEmojiTarget}
           daiSuAnswerLogs={daiSuAnswerLogs}
+          daiSuAnswerLogModeFilter={daiSuAnswerLogModeFilter}
           daiSuAssistant={daiSuAssistant}
           daiSuDocumentForm={daiSuDocumentForm}
           daiSuDocuments={daiSuDocuments}
+          daiSuLessonQuery={daiSuLessonQuery}
+          daiSuLessons={daiSuLessons}
+          daiSuPreviewPrompt={daiSuPreviewPrompt}
+          daiSuPreviewResult={daiSuPreviewResult}
+          daiSuProvider={daiSuProvider}
+          handleDaiSuAnswerLogsClear={handleDaiSuAnswerLogsClear}
+          handleDaiSuAnswerLogModeChange={handleDaiSuAnswerLogModeChange}
           selectedThreadTyping={selectedThreadTyping}
           selectedThread={selectedThread}
           selectedThreadId={selectedThreadId}
           selectedStudent={selectedStudent}
           selectedStudentKey={selectedStudentKey}
           hasMoreMessages={selectedThreadHasMore}
+          handleDaiSuLessonDelete={handleDaiSuLessonDelete}
+          handleOpenDaiSuLogThread={handleOpenDaiSuLogThread}
+          handleDaiSuPreview={handleDaiSuPreview}
+          isDaiSuPreviewLoading={isDaiSuPreviewLoading}
           adminComposeRef={adminComposeRef}
           setAdminFilter={setAdminFilter}
           setAdminName={setAdminName}
@@ -2221,6 +2233,8 @@ function App() {
           setEmojiQuery={setEmojiQuery}
           setMessageEmojiTarget={setMessageEmojiTarget}
           setDaiSuDocumentForm={setDaiSuDocumentForm}
+          setDaiSuLessonQuery={setDaiSuLessonQuery}
+          setDaiSuPreviewPrompt={setDaiSuPreviewPrompt}
           setEditingDaiSuDocumentId={setEditingDaiSuDocumentId}
           setSelectedThreadId={setSelectedThreadId}
           setSelectedStudentKey={setSelectedStudentKey}
@@ -3745,9 +3759,15 @@ function AdminScreen({
   adminTagFilter,
   adminStudentMessage,
   daiSuAnswerLogs,
+  daiSuAnswerLogModeFilter,
   daiSuAssistant,
   daiSuDocumentForm,
   daiSuDocuments,
+  daiSuLessonQuery,
+  daiSuLessons,
+  daiSuPreviewPrompt,
+  daiSuPreviewResult,
+  daiSuProvider,
   emojiPickerTarget,
   emojiQuery,
   emojiResults,
@@ -3760,9 +3780,14 @@ function AdminScreen({
   handleAdminReplyStart,
   handleAdminStatusChange,
   handleCreateStudentChat,
+  handleDaiSuAnswerLogsClear,
+  handleDaiSuAnswerLogModeChange,
   handleDaiSuDocumentDelete,
   handleDaiSuDocumentEdit,
   handleDaiSuDocumentSubmit,
+  handleDaiSuLessonDelete,
+  handleOpenDaiSuLogThread,
+  handleDaiSuPreview,
   handleDaiSuSettingsChange,
   onOpenBanDialog,
   onUnban,
@@ -3780,6 +3805,7 @@ function AdminScreen({
   isAdminSending,
   isEmojiLoading,
   isLoadingMessages,
+  isDaiSuPreviewLoading,
   navigateTo,
   onRequestDeleteTag,
   pendingProfileRequests,
@@ -3806,6 +3832,8 @@ function AdminScreen({
   setMessageEmojiTarget,
   setSelectedThreadId,
   setSelectedStudentKey,
+  setDaiSuLessonQuery,
+  setDaiSuPreviewPrompt,
   setTagName,
   statusCounts,
   studentThreadCounts,
