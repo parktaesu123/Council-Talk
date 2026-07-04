@@ -271,7 +271,9 @@ test("daisu can generate an automatic reply from published knowledge", async () 
   assert.equal(reply.assistantMessage.author, "admin");
   assert.equal(reply.assistantMessage.authorLabel, "따이수");
   assert.match(reply.assistantMessage.text, /수강 정정/);
+  assert.equal(reply.assistantMessage.assistant.providerSkippedReason, "provider-disabled");
   assert.equal(reply.log.matchedDocumentIds.length, 1);
+  assert.equal(reply.log.providerSkippedReason, "provider-disabled");
 });
 
 test("daisu introduces itself and admits when it does not know", async () => {
