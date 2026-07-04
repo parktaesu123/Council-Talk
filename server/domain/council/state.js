@@ -141,6 +141,7 @@ export const normalizeDaiSuAnswerLog = (value = {}) => ({
   score: Number(value.score) || 0,
   mode: String(value.mode || "auto").trim() || "auto",
   createdAt: String(value.createdAt || "").trim(),
+  providerSkippedReason: normalizeDaiSuShortText(value.providerSkippedReason || "", 40),
 });
 export const normalizeDaiSuLesson = (value = {}) => ({
   id: String(value.id || "").trim(),
