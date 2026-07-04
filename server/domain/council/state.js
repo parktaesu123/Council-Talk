@@ -36,6 +36,8 @@ export const studentKey = ({ studentId, name }) => `${studentId}:${name}`;
 export const isValidStudentPin = (pin) => /^\d{4}$/.test(String(pin || "").trim());
 export const isValidStudentIdentity = ({ studentId, name }) =>
   /^\d{4}$/.test(String(studentId || "").trim()) && Boolean(String(name || "").trim());
+export const DAISU_THREAD_TITLE = "따이수와 대화";
+export const isDaiSuThread = (thread) => String(thread?.title || "").trim() === DAISU_THREAD_TITLE;
 
 export const publicStudent = (student) => ({
   studentId: student.studentId,
