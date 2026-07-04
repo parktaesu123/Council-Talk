@@ -1,8 +1,6 @@
 import nodemailer from "nodemailer";
 
-import { normalizeThreadStatus, studentKey } from "../../domain/council/state.js";
-
-const isDaiSuThread = (thread) => String(thread?.title || "").trim() === "따이수와 대화";
+import { isDaiSuThread, normalizeThreadStatus, studentKey } from "../../domain/council/state.js";
 
 const escapeHtml = (value) =>
   String(value)
