@@ -42,6 +42,7 @@ export const createGenerateDaiSuReplyForThread = ({
     const {
       matchedDocuments,
       mode,
+      providerSkippedReason,
       replyText,
       score,
       usedFallback,
@@ -69,6 +70,7 @@ export const createGenerateDaiSuReplyForThread = ({
         confidence: score,
         matchedDocumentIds: matchedDocuments.map((document) => document.id),
         mode,
+        providerSkippedReason,
       },
     };
 
@@ -85,6 +87,7 @@ export const createGenerateDaiSuReplyForThread = ({
       studentMessageId: studentMessage.id,
       assistantMessageId: assistantMessage.id,
       matchedDocumentIds: matchedDocuments.map((document) => document.id),
+      providerSkippedReason,
       score,
       mode: usedFallback ? "auto-fallback" : mode,
       createdAt: now,
