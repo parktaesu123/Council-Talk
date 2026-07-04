@@ -5,6 +5,7 @@ import { createCouncilService } from "../application/services/createCouncilServi
 import {
   createThreadSummary,
   createThreadSummaries,
+  isDaiSuThread,
   initialCouncilState,
   sortThreadsByActivity,
 } from "../domain/council/state.js";
@@ -82,8 +83,6 @@ export const createServerRuntime = async ({ config }) => {
     handlers: notificationHandlers,
     logger,
   });
-  const isDaiSuThread = (thread) => String(thread?.title || "").trim() === "따이수와 대화";
-
   eventBus.subscribe(async (events) => {
     for (const event of events) {
       if (event.payload?.thread) {
