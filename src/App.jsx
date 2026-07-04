@@ -3360,6 +3360,11 @@ function DaiSuAdminPanel({
     "provider-exception": "생성형 모델 연결 중 오류가 발생해 참고 문서 기반 답변으로 대체되었습니다.",
     "empty-provider-response": "생성형 모델이 빈 응답을 반환해서 참고 문서 기반 답변으로 대체되었습니다.",
   };
+  const providerConnectionLabel = !provider?.enabled
+    ? "비활성화"
+    : provider?.configured
+      ? "연결 준비됨"
+      : "API 키 필요";
 
   return (
     <div className="daisu-admin-page">
@@ -3373,7 +3378,7 @@ function DaiSuAdminPanel({
         <div className="daisu-status-grid">
           <div className="daisu-status-item">
             <span>AI 연결</span>
-            <strong>{provider?.configured ? "연결됨" : "API 키 필요"}</strong>
+            <strong>{providerConnectionLabel}</strong>
           </div>
           <div className="daisu-status-item">
             <span>모델</span>
@@ -3382,6 +3387,10 @@ function DaiSuAdminPanel({
           <div className="daisu-status-item">
             <span>Provider</span>
             <strong>{provider?.provider || "openai"}</strong>
+          </div>
+          <div className="daisu-status-item">
+            <span>타임아웃</span>
+            <strong>{provider?.timeoutMs ? `${provider.timeoutMs}ms` : "-"}</strong>
           </div>
           <div className="daisu-status-item">
             <span>학습 답변 수</span>
