@@ -1698,6 +1698,13 @@ textarea:focus {
   white-space: pre-wrap;
 }
 
+.daisu-log-warning {
+  color: #b45309;
+  font-size: 12px;
+  font-weight: 700;
+  line-height: 1.5;
+}
+
 .admin-name input {
   height: 34px;
   border: 0;
