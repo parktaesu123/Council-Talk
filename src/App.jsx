@@ -3431,6 +3431,12 @@ function DaiSuAdminPanel({
               <article className="daisu-log-item" key={log.id}>
                 <strong>{log.mode}</strong>
                 <span>{log.createdAt || "-"}</span>
+                {log.providerSkippedReason && (
+                  <small className="daisu-log-warning">
+                    {previewWarningByReason[log.providerSkippedReason] ||
+                      "생성형 모델을 사용하지 못해 참고 문서 기반 답변으로 대체되었습니다."}
+                  </small>
+                )}
                 <button onClick={() => handleOpenLogThread(log.threadId)} type="button">문의 열기</button>
               </article>
             ))}
