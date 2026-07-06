@@ -1,6 +1,7 @@
 import test from "node:test";
 import assert from "node:assert/strict";
 import http from "node:http";
+import path from "node:path";
 
 import { createHttpApp } from "./createHttpApp.js";
 
@@ -8,6 +9,7 @@ test("http app serves healthz", async () => {
   const app = createHttpApp({
     runtime: {
       config: {
+        staticDir: path.resolve(process.cwd(), "dist"),
         smtp: { from: "", host: "", pass: "", user: "" },
       },
       emojiHubClient: { search: async () => [] },
