@@ -1,4 +1,5 @@
 export const createTypingPresenceService = ({ heartbeatTtlMs = 8000, sseHub }) => {
+  const cleanupGraceMs = 500;
   const typingStates = new Map();
 
   const serialize = () => ({
@@ -38,7 +39,7 @@ export const createTypingPresenceService = ({ heartbeatTtlMs = 8000, sseHub }) =
             typingStates.delete(key);
             broadcast();
           }
-        }, heartbeatTtlMs + 500);
+        }, heartbeatTtlMs + cleanupGraceMs);
       } else {
         typingStates.delete(key);
       }
