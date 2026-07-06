@@ -3444,6 +3444,8 @@ function DaiSuAdminPanel({
                   <small className="daisu-log-warning">
                     {previewWarningByReason[log.providerSkippedReason] ||
                       "생성형 모델을 사용하지 못해 참고 문서 기반 답변으로 대체되었습니다."}
+                    {" "}
+                    <code>{log.providerSkippedReason}</code>
                   </small>
                 )}
                 <button onClick={() => handleOpenLogThread(log.threadId)} type="button">문의 열기</button>
@@ -3502,6 +3504,8 @@ function DaiSuAdminPanel({
                 <p className="daisu-preview-warning">
                   {previewWarningByReason[previewResult.providerSkippedReason] ||
                     "생성형 모델을 사용하지 못해 참고 문서 기반 답변으로 대체되었습니다."}
+                  {" "}
+                  <code>{previewResult.providerSkippedReason}</code>
                 </p>
               )}
               <p>{previewResult.replyText}</p>
