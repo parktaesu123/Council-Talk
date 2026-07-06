@@ -3500,6 +3500,9 @@ function DaiSuAdminPanel({
           {previewResult && (
             <article className="daisu-document-item">
               <strong>{previewResult.mode || "unknown"} · score {previewResult.score ?? 0}</strong>
+              <span>
+                참고 문서 {(previewResult.matchedDocuments || []).length}건
+              </span>
               {previewResult.providerSkippedReason && (
                 <p className="daisu-preview-warning">
                   {previewWarningByReason[previewResult.providerSkippedReason] ||
