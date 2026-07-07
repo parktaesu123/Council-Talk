@@ -41,3 +41,19 @@ test("emoji hub client caches results and defaults to smileys", async () => {
   assert.equal(second.length, 1);
   assert.equal(second[0].emoji, "🐶");
 });
+
+test("emoji hub client respects the requested limit", async () => {
+  const client = createEmojiHubClient({
+    async fetchImpl() {
+      return {
+        ok: true,
+        async json() {
+          return samplePayload;
+        },
+      };
+    },
+  });
+
+  const results = await client.search({ limit: 1, query: "face" });
+  assert.equal(results.length, 1);
+});
