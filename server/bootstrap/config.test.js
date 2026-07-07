@@ -27,3 +27,15 @@ test("createConfig normalizes anthropic provider and timeout bounds", () => {
   assert.equal(config.smtp.secure, true);
   assert.equal(config.smtp.port, 465);
 });
+
+test("createConfig respects explicit daisu disable flag", () => {
+  const config = createConfig({
+    DAISU_AI_ENABLED: "false",
+    DAISU_AI_PROVIDER: "invalid-provider",
+    DAISU_AI_TIMEOUT_MS: "10",
+  });
+
+  assert.equal(config.daisuAi.enabled, false);
+  assert.equal(config.daisuAi.provider, "openai");
+  assert.equal(config.daisuAi.timeoutMs, 1000);
+});
