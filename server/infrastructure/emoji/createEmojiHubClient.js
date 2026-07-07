@@ -1,5 +1,8 @@
 const EMOJI_HUB_ALL_URL = "https://emojihub.yurace.pro/api/all";
 const CACHE_TTL_MS = 1000 * 60 * 60 * 6;
+const DEFAULT_EMOJI_CATEGORY = "smileys and people";
+const DEFAULT_SEARCH_LIMIT = 120;
+const DEFAULT_CATEGORY_SAMPLE_LIMIT = 180;
 
 const decodeUnicodeCodepoints = (unicodeList = []) =>
   unicodeList
@@ -48,7 +51,7 @@ export const createEmojiHubClient = ({ fetchImpl = fetch, now = () => Date.now()
 
   return {
     async search({ limit = 120, query = "" } = {}) {
-      const normalizedLimit = Math.max(1, Math.min(Number(limit) || 120, 300));
+      const normalizedLimit = Math.max(1, Math.min(Number(limit) || DEFAULT_SEARCH_LIMIT, 300));
       const normalizedQuery = String(query || "").trim().toLowerCase();
       const items = await loadAll();
 
@@ -59,7 +62,9 @@ export const createEmojiHubClient = ({ fetchImpl = fetch, now = () => Date.now()
               item.group.toLowerCase().includes(normalizedQuery) ||
               item.category.toLowerCase().includes(normalizedQuery),
           )
-        : items.filter((item) => item.category === "smileys and people").slice(0, 180);
+        : items
+            .filter((item) => item.category === DEFAULT_EMOJI_CATEGORY)
+            .slice(0, DEFAULT_CATEGORY_SAMPLE_LIMIT);
 
       return filtered.slice(0, normalizedLimit);
     },
