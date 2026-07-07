@@ -15,6 +15,7 @@
 - `GET /healthz`가 `ok`를 반환하는지 먼저 본다.
 - 관리자/학생 화면에서 SSE 연결이 살아 있으면 새 메시지와 typing 이벤트가 즉시 반영된다.
 - typing 표시는 마지막 heartbeat 이후 약 8초 뒤 자동 정리된다.
+- 새 연결 직후에는 `connected`, `sync`, `typing` snapshot 이벤트가 먼저 내려온다.
 
 ## 장애 체크
 
