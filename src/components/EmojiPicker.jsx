@@ -21,6 +21,7 @@ export default function EmojiPicker({
         ) : (
           emojis.map((emoji) => (
             <button
+              aria-label={`${emoji.name} 이모지 선택`}
               className="emoji-picker-item"
               key={`${emoji.name}:${emoji.emoji}`}
               onClick={() => onPick(emoji)}
