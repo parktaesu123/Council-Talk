@@ -47,3 +47,29 @@ test("http app serves healthz", async () => {
     assert.equal(body, "ok\n");
   });
 });
+
+test("http app reports mail configuration status", async () => {
+  await withTestServer(
+    createTestRuntime({
+      config: {
+        adminPassword: "test-password",
+        staticDir: path.resolve(process.cwd(), "dist"),
+        smtp: {
+          from: "council@example.com",
+          host: "smtp.example.com",
+          pass: "secret",
+          user: "council@example.com",
+        },
+      },
+    }),
+    async (baseUrl) => {
+      const response = await fetch(`${baseUrl}/api/mail-status`);
+      const body = await response.json();
+
+      assert.equal(response.status, 200);
+      assert.equal(body.configured, true);
+      assert.deepEqual(body.missing, []);
+      assert.equal(body.host, "smtp.example.com");
+    },
+  );
+});
