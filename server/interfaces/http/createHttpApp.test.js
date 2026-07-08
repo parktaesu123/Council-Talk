@@ -5,22 +5,27 @@ import path from "node:path";
 
 import { createHttpApp } from "./createHttpApp.js";
 
-test("http app serves healthz", async () => {
+const createTestRuntime = (overrides = {}) => ({
+  adminToken: "test-admin-token",
+  config: {
+    adminPassword: "test-password",
+    staticDir: path.resolve(process.cwd(), "dist"),
+    smtp: { from: "", host: "", pass: "", user: "" },
+  },
+  emojiHubClient: { search: async () => [] },
+  handleCommittedEvents: async () => {},
+  service: {
+    listNotificationEmails: async () => ({ emails: [] }),
+    listTags: async () => ({ tags: [] }),
+  },
+  sseHub: { handleConnection: async () => {} },
+  typingPresence: { update: () => true },
+  ...overrides,
+});
+
+const withTestServer = async (runtime, callback) => {
   const app = createHttpApp({
-    runtime: {
-      config: {
-        staticDir: path.resolve(process.cwd(), "dist"),
-        smtp: { from: "", host: "", pass: "", user: "" },
-      },
-      emojiHubClient: { search: async () => [] },
-      handleCommittedEvents: async () => {},
-      service: {
-        listNotificationEmails: async () => ({ emails: [] }),
-        listTags: async () => ({ tags: [] }),
-      },
-      sseHub: { handleConnection: async () => {} },
-      typingPresence: { update: () => true },
-    },
+    runtime,
   });
   const server = http.createServer(app);
 
@@ -28,11 +33,17 @@ test("http app serves healthz", async () => {
   const { port } = server.address();
 
   try {
-    const response = await fetch(`http://127.0.0.1:${port}/healthz`);
-    const body = await response.text();
-    assert.equal(response.status, 200);
-    assert.equal(body, "ok\n");
+    return await callback(`http://127.0.0.1:${port}`);
   } finally {
     await new Promise((resolve, reject) => server.close((error) => (error ? reject(error) : resolve())));
   }
+};
+
+test("http app serves healthz", async () => {
+  await withTestServer(createTestRuntime(), async (baseUrl) => {
+    const response = await fetch(`${baseUrl}/healthz`);
+    const body = await response.text();
+    assert.equal(response.status, 200);
+    assert.equal(body, "ok\n");
+  });
 });
