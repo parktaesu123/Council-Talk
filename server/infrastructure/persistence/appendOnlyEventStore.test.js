@@ -20,3 +20,13 @@ test("append only event store appends sequence numbers and reads sorted events",
   assert.equal(second[0].sequence, 2);
   assert.deepEqual(events.map((event) => event.type), ["first", "second"]);
 });
+
+test("append only event store ignores empty append batches", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "council-talk-empty-event-store-"));
+  const store = createAppendOnlyEventStore({
+    filePath: path.join(tempDir, "events.jsonl"),
+  });
+
+  assert.deepEqual(await store.append([], 10), []);
+  assert.deepEqual(await store.readAll(), []);
+});
