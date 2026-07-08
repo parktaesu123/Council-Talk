@@ -19,3 +19,4 @@ logic.
 - `domain/**.test.js`: small policy and normalization helpers
 - `infrastructure/**.test.js`: SSE, emoji client, typing presence, durable dispatcher, state store
 - `interfaces/http/createHttpApp.test.js`: lightweight HTTP harness checks such as `healthz`
+- `shared/**.test.js`: clock and crypto helpers that multiple layers depend on
