@@ -103,3 +103,27 @@ test("daisu model client supports anthropic messages api", async () => {
   assert.equal(capturedRequest.body.model, "claude-sonnet-4-20250514");
   assert.equal(Array.isArray(capturedRequest.body.messages), true);
 });
+
+test("daisu model client skips when provider is disabled", async () => {
+  const client = createDaiSuModelClient({
+    config: {
+      daisuAi: {
+        apiKey: "test-key",
+        apiUrl: "https://example.com",
+        enabled: false,
+        model: "test-model",
+        timeoutMs: 1000,
+      },
+    },
+    logger: { error() {} },
+  });
+
+  const result = await client.generateReply({
+    assistant: { name: "따이수" },
+    contextText: "학생회 참고 내용",
+    conversation: [{ role: "user", content: "안내해줘" }],
+  });
+
+  assert.equal(result.text, "");
+  assert.equal(result.skipped, "provider-disabled");
+});
