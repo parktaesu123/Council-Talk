@@ -127,3 +127,45 @@ test("daisu model client skips when provider is disabled", async () => {
   assert.equal(result.text, "");
   assert.equal(result.skipped, "provider-disabled");
 });
+
+test("daisu model client reports empty provider responses", async () => {
+  const originalFetch = global.fetch;
+  global.fetch = async () => ({
+    ok: true,
+    async json() {
+      return {
+        choices: [
+          {
+            message: {
+              content: "   ",
+            },
+          },
+        ],
+      };
+    },
+  });
+
+  const client = createDaiSuModelClient({
+    config: {
+      daisuAi: {
+        apiKey: "test-key",
+        apiUrl: "https://example.com",
+        enabled: true,
+        model: "test-model",
+        timeoutMs: 1000,
+      },
+    },
+    logger: { error() {} },
+  });
+
+  const result = await client.generateReply({
+    assistant: { name: "따이수" },
+    contextText: "학생회 참고 내용",
+    conversation: [{ role: "user", content: "안내해줘" }],
+  });
+
+  global.fetch = originalFetch;
+
+  assert.equal(result.text, "");
+  assert.equal(result.skipped, "empty-provider-response");
+});
