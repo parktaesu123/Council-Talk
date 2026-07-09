@@ -79,5 +79,5 @@ test("durable dispatcher skips events already covered by the stored cursor", asy
   await dispatcher.replayPending();
 
   assert.deepEqual(handled, []);
-  assert.match(await readFile(cursorFilePath, "utf8"), /"lastSequence": 2/);
+  assert.match(await readFile(cursorFilePath, "utf8"), /"lastSequence":2/);
 });
