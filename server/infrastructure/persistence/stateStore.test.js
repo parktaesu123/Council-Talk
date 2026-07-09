@@ -2,7 +2,7 @@ import test from "node:test";
 import assert from "node:assert/strict";
 import os from "node:os";
 import path from "node:path";
-import { mkdtemp } from "node:fs/promises";
+import { mkdtemp, writeFile } from "node:fs/promises";
 
 import { createAppendOnlyEventStore } from "./appendOnlyEventStore.js";
 import { createStateStore } from "./stateStore.js";
@@ -72,4 +72,30 @@ test("state store serializes concurrent transactions", async () => {
   ]);
 
   assert.deepEqual(await stateStore.read(), { count: 4 });
+});
+
+test("state store merges initial defaults when snapshot state is malformed", async () => {
+  const tempDir = await mkdtemp(path.join(os.tmpdir(), "council-talk-store-"));
+  const eventStore = createAppendOnlyEventStore({
+    filePath: path.join(tempDir, "events.jsonl"),
+  });
+  const snapshotFilePath = path.join(tempDir, "snapshot.json");
+
+  await writeFile(
+    snapshotFilePath,
+    JSON.stringify({
+      lastSequence: 0,
+      updatedAt: "2026-07-09T00:00:00.000Z",
+      state: { count: 5 },
+    }),
+  );
+
+  const stateStore = createStateStore({
+    eventStore,
+    evolve,
+    initialState: { count: 0, nested: { ok: true } },
+    snapshotFilePath,
+  });
+
+  assert.deepEqual(await stateStore.read(), { count: 5, nested: { ok: true } });
 });
